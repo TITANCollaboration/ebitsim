@@ -34,6 +34,47 @@ class RkStepParams:
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
 
 
+class ChargePopulationParams:
+    def __init__(self,
+                 species,
+                 chargeStates,
+                 probeFn,
+                 breedingTime=0.1,
+                 probeEvery=0.1,
+                 ionEbeamOverlap=1.0,
+                 beamEnergy=3000.0,
+                 beamCurrent=0.1,
+                 beamRadius=200.0e-4,
+                 pressure=1e-12,
+                 ionTemperature=100.0,
+                 currentDensity=None,
+                 population=None,
+                 decayConstants=None,
+                 ionizationRates=None,
+                 rrRates=None,
+                 chexRates=None,
+                 rkParams=None,
+                 results=[]):
+        self.species = species
+        self.chargeStates = chargeStates,
+        self.probeFn = probeFn,
+        self.breedingTime = breedingTime
+        self.probeEvery = probeEvery
+        self.ionEbeamOverlap = ionEbeamOverlap
+        self.beamEnergy = beamEnergy
+        self.beamCurrent = beamCurrent
+        self.beamRadius = beamRadius
+        self.pressure = pressure
+        self.ionTemperature = ionTemperature
+        self.currentDensity = currentDensity
+        self.population = population
+        self.decayConstants = decayConstants
+        self.ionizationRates = ionizationRates
+        self.rrRates = rrRates
+        self.chexRates = chexRates
+        self.rkParams = rkParams
+        self.results = results
+
 def createEmptyListofLists(species):
     emptylist = [[0.0 for i in range(species[0].Z + 2)] for j in range(len(species) + 1)]  # Init multidimentional array w/ 0's
     return emptylist
@@ -109,70 +150,100 @@ def createDefaultInteractionRates(species, beamEnergy, currentDensity, myfunc, p
     return interactionRates
 
 
-def calculateK():
+def calculateK(chargePopParams, retK, p1, p2, addWFactor):
     return
 
 
-def rkStep():
+def rkStep(chargePopParams, tstep, populationT0, populationTtstep, k1, k2, k3, k4, tmp):
+
     return
 
 
-def adaptiveRkStepper(breedingTime, probeEvery, probeFn, population, species, decayConstants, ionizationRates, chexRates, rrRates, rkParams):
+def adaptiveRkStepper(chargePopParams):
     #  Must create some arrays...
-    k1 = k2 = k3 = k4 = tmp = y1 = y12 = y22 = createEmptyListofLists(species)
+    k1 = k2 = k3 = k4 = tmp = y1 = y12 = y22 = createEmptyListofLists(chargePopParams.species)
     time = 0.0
     nextPrint = 0.0
     noTooBigSteps = 0
-    step = rkParams.tStep  # Not sure if there is method to this madness yet..
+    step = chargePopParams.rkParams.tStep  # Not sure if there is method to this madness yet..
     bestStepSize = step  # Currently just translating directly will try to be more nuanced after another pass
 
-    desiredAccuracy = rkParams.desiredAccuracyPerChargeState / species[0].Z
+    desiredAccuracy = chargePopParams.rkParams.desiredAccuracyPerChargeState / chargePopParams.species[0].Z
+    print(desiredAccuracy)
+    while time <= chargePopParams.breedingTime:
+        if time >= nextPrint:
+            nextPrint = nextPrint + chargePopParams.probeEvery
+            chargePopParams.probeFn(time, chargePopParams)
+        rkStep(chargePopParams, 2 * step, chargePopParams.population, y1, k1, k2, k3, k4, tmp)
+    return
+
+
+def probeFnAddPop(time, chargePopParams):
+    #  In the original lisp code this function was passed along to calcChargePopulations
+    #  so for now I will do the same as apparently this is something someone might want
+    #  to change to a different function... If someone knows the reasonf for this please
+    #  let me know.
+    newresult = []
+    for charge in chargePopParams.chargeStates:
+        newresult.append([time, chargePopParams.population[charge - 1]])
+    chargePopParams.result.append(newresult)
+
+
+def calcChargePopulations(chargePopParams):
+
+    if chargePopParams.currentDensity is None:
+        chargePopParams.currentDensity = (chargePopParams.ionEbeamOverlap * chargePopParams.beamCurrent) / (pi * (chargePopParams.beamRadius ** 2))
+
+    chargePopParams.species.sort(key=lambda x: x.Z, reverse=True)  # Sort by Z in decending order
+
+    if chargePopParams.population is None:
+        chargePopParams.population = createDefaultPopulation(chargePopParams.species)
+
+    if chargePopParams.decayConstants is None:
+        chargePopParams.decayConstants = createDecayConstants(chargePopParams.species)
+
+    if chargePopParams.ionizationRates is None:
+        chargePopParams.ionizationRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createIonizationCrossSections)
+
+    if chargePopParams.rrRates is None:
+        chargePopParams.rrRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createRRCrossSections)
+
+    if chargePopParams.chexRates is None:
+        chargePopParams.chexRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createChargeExchangeRates, chargePopParams.pressure, chargePopParams.ionTemperature, 1)
+
+    chargePopParams.rkParams = RkStepParams()
+
+    adaptiveRkStepper(chargePopParams)
 
     return
 
 
-def calcChargePopulations(species,
-                          probeFn='something',
-                          breedingTime=0.1,
-                          probeEvery=0.1,
-                          ionEbeamOverlap=1.0,
-                          beamEnergy=3000.0,
-                          beamCurrent=0.1,
-                          beamRadius=200.0e-4,
-                          pressure=1e-12,
-                          ionTemperature=100.0,
-                          currentDensity=None,
-                          population=None,
-                          decayConstants=None,
-                          ionizationRates=None,
-                          rrRates=None,
-                          chexRates=None,
-                          rkParams=None):
-
-    if currentDensity is None:
-        currentDensity = (ionEbeamOverlap * beamCurrent) / (pi * (beamRadius ** 2))
-
+def main():
+    chargeStates = [39, 40, 41, 42, 43]
     species = []
     species.append(Species(4, 107, 0.0, 0.0, 7.0))
     species.append(Species(2, 107, 0.0, 1.0, 6.0))
     species.append(Species(6, 107, 0.0, 0.0, 5.0))
-    species.sort(key=lambda x: x.Z, reverse=True)  # Sort by Z in decending order
+    myparams = ChargePopulationParams(species, chargeStates, probeFnAddPop)
+    calcChargePopulations(myparams)
+    return
 
-    if population is None:
-        population = createDefaultPopulation(species)
 
-    if decayConstants is None:
-        decayConstants = createDecayConstants(species)
-
-    if ionizationRates is None:
-        ionizationRates = createDefaultInteractionRates(species, beamEnergy, currentDensity, createIonizationCrossSections)
-
-    if rrRates is None:
-        rrRates = createDefaultInteractionRates(species, beamEnergy, currentDensity, createRRCrossSections)
-
-    if chexRates is None:
-        chexRates = createDefaultInteractionRates(species, beamEnergy, currentDensity, createChargeExchangeRates, pressure, ionTemperature, 1)
-
-    rkParams = RkStepParams()
-
-    adaptiveRkStepper(breedingTime, probeEvery, probeFn, population, species, decayConstants, ionizationRates, chexRates, rrRates, rkParams)
+def testpopdata():
+    result = [1.0773715045951986e-10,-2.5221903096086526e-10,2.3449007288242245e-10, \
+        -1.2221336132501444e-10,4.026919164871968e-11,-9.343245253069252e-12, \
+        1.4314856326808133e-12,-1.6629498403738547e-13,1.5050512947015083e-14, \
+        -1.0786148204346698e-15,6.280613072141581e-17,-2.9130702329533736e-18, \
+        1.1194883347241496e-19,-3.586879680201691e-21,9.650587100702459e-23, \
+        -2.1886639635205885e-24,5.455806595921941e-26,1.684653698776325e-26, \
+        1.3161935364266835e-26,5.531656225764603e-27,3.2398603494337613e-28, \
+        -1.0338100473059566e-27,-2.8913558824647924e-27,-8.991390624069855e-27, \
+        -1.2091860673384666e-26,2.0231038762218803e-26,7.085002901940573e-24, \
+        1.2688700954569216e-21,1.8624840081805598e-19,2.210926329822218e-17, \
+        2.116430358816347e-15,1.6355013404941251e-13,1.0084173983337306e-11, \
+        4.937354709682791e-10,2.039748431910559e-8,6.670812700176424e-7, \
+        1.6861321657554175e-5,3.2227812666130867e-4,0.004264150985831597e0, \
+        0.03850582390819178e0,0.22895681488195369e0,0.5902408926186803e0, \
+        0.1329114487663367e0,0.004781041407944411e0,0.0e0,0.0e0,0.0e0,0.0e0,0.0e0, \
+        0.0e0,0.0e0,0.0e0,0.0e0]
+    return result
