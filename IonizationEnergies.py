@@ -41,17 +41,11 @@ def createIonizationEnergies(ionBindingEnergiesFromCSV):
     return ionizationEnergies
 
 
-def getCarlsonCorrectedBindEnergy(Z, q, e):
+def getCarlsonCorrectedBindEnergy(Z, q, e, ionizationEnergies, naturalBindingEnergies):
     # COMMENT STOLEN FROM OLD LISP CODE :"Given the proton number Z (1,105) and the charge state q (0,105),
     # returns the carlson corrected energy of a electron with number e for
     # the ion in charge state q. THIS NEXT PART IS NOT TESTED TO WORK : Be aware: If asked for a bogus charge
     # state, i.e. He10+, it will return 0d0."
-    ionBindingEnergiesFromCSV = readInCSV('ionBindingEnergies.csv')  # convert from negatives to positives before maths
-    naturalBindingEnergies = readInCSV('naturalBindingEnergiesList.csv')
-    # Read function create-ionization-energies to get this...
-    #ionizationEnergies = reverseMyList(ionizationEnergies)
-    ionizationEnergies = createIonizationEnergies(ionBindingEnergiesFromCSV)
-    naturalBindingEnergies = reverseMyList(naturalBindingEnergies)
 
     # I'm using this try/except so I don't have to pad the array with a bunch of
     # extra 0's
@@ -65,18 +59,23 @@ def getCarlsonCorrectedBindEnergy(Z, q, e):
     return carlsonCorrection
 
 
-def lotzIonizationCrossSection(electronEnergy, Z, eToRemove):
+def lotzIonizationCrossSection(electronEnergy, Z, eToRemove, ionizationEnergies, naturalBindingEnergies):
     sigma = 0.0
 
     for j in range(eToRemove + 1, Z + 1):
-        correctedBindingEnergy = getCarlsonCorrectedBindEnergy(Z, (eToRemove + 1), j)
-
+        correctedBindingEnergy = getCarlsonCorrectedBindEnergy(Z, (eToRemove + 1), j, ionizationEnergies, naturalBindingEnergies)
         if (correctedBindingEnergy < electronEnergy) and (correctedBindingEnergy > 0):
             sigma = sigma + ((4.5e-14 * log(electronEnergy / correctedBindingEnergy)) / (electronEnergy * correctedBindingEnergy))
     return sigma
 
 def createIonizationCrossSections(electronEnergy, Z):
+    ionBindingEnergiesFromCSV = readInCSV('ionBindingEnergies.csv')  # convert from negatives to positives before maths
+    naturalBindingEnergies = readInCSV('naturalBindingEnergiesList.csv')
+    # Read function create-ionization-energies to get this...
+    #ionizationEnergies = reverseMyList(ionizationEnergies)
+    ionizationEnergies = createIonizationEnergies(ionBindingEnergiesFromCSV)
+    naturalBindingEnergies = reverseMyList(naturalBindingEnergies)
     crossSections = [0] * (Z + 1)
     for q in range(0, Z + 1):
-        crossSections[q] = lotzIonizationCrossSection(electronEnergy, Z, q)
+        crossSections[q] = lotzIonizationCrossSection(electronEnergy, Z, q, ionizationEnergies, naturalBindingEnergies)
     return crossSections

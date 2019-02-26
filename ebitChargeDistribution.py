@@ -2,6 +2,7 @@
 from math import *
 from IonizationEnergies import *
 from rr import *
+import sys
 
 
 __EMASS__ = 5.11e5  # "Electron mass in eV"
@@ -19,13 +20,33 @@ __MAXSPECIES__ = 1000
 
 
 class Species:
-    def __init__(self, Z, A, decaysTo=0.0, betaHalfLife=0.0, initSCIPop=1.0):
+    def __init__(self,
+                 Z,
+                 A,
+                 decaysTo=0.0,
+                 betaHalfLife=0.0,
+                 initSCIPop=1.0,
+                 chargeStates=None,
+                 population=None,
+                 decayConstant=0.0,
+                 ionizationRates=None,
+                 rrRates=None,
+                 chargeExchangeRates=None):
         self.Z = Z
         self.A = A
         self.decaysTo = decaysTo
         self.betaHalfLife = betaHalfLife
         self.initSCIPop = initSCIPop
+        self.population = population
+        self.decayConstant = decayConstant
+        self.ionizationRates = ionizationRates
+        self.rrRates = rrRates
+        self.chargeExchangeRates = chargeExchangeRates
+        self.chargeStates = chargeStates
 
+
+# I think I need to move chargeStates up to here.. could concievibly do that for a bunch
+# of the stuff in chargepopparams due to maybe they should be following the species around
 
 class RkStepParams:
     def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-4):
@@ -34,11 +55,8 @@ class RkStepParams:
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
 
 
-class ChargePopulationParams:
+class EbitParams:
     def __init__(self,
-                 species,
-                 chargeStates,
-                 probeFn,
                  breedingTime=0.1,
                  probeEvery=0.1,
                  ionEbeamOverlap=1.0,
@@ -48,16 +66,8 @@ class ChargePopulationParams:
                  pressure=1e-12,
                  ionTemperature=100.0,
                  currentDensity=None,
-                 population=None,
-                 decayConstants=None,
-                 ionizationRates=None,
-                 rrRates=None,
-                 chexRates=None,
                  rkParams=None,
                  results=[]):
-        self.species = species
-        self.chargeStates = chargeStates,
-        self.probeFn = probeFn,
         self.breedingTime = breedingTime
         self.probeEvery = probeEvery
         self.ionEbeamOverlap = ionEbeamOverlap
@@ -67,40 +77,35 @@ class ChargePopulationParams:
         self.pressure = pressure
         self.ionTemperature = ionTemperature
         self.currentDensity = currentDensity
-        self.population = population
-        self.decayConstants = decayConstants
-        self.ionizationRates = ionizationRates
-        self.rrRates = rrRates
-        self.chexRates = chexRates
         self.rkParams = rkParams
         self.results = results
+
 
 def createEmptyListofLists(species):
     emptylist = [[0.0 for i in range(species[0].Z + 2)] for j in range(len(species) + 1)]  # Init multidimentional array w/ 0's
     return emptylist
 
 
-def createDefaultPopulation(species):
+def createEmptyList(sizeOfArray):
+    myEmptyList = [0.0 for i in range(sizeOfArray)]
+    return myEmptyList
+
+
+#def createDefaultPopulation(species):
 # length of new array needs to be 1+# of species and 2+maxZ value
-    populationList = createEmptyListofLists(species)
-    for i in range(0, len(species)):
-        populationList[i][1] = species[i].initSCIPop
+    #populationList = createEmptyListofLists(species)
+   # for i in range(0, len(species)):
+       # populationList[i][1] = species[i].initSCIPop
+#    emptylist = [0.0 for i in range(species[0].Z + 2)]
+#    return populationList
 
-    return populationList
 
-
-def createDecayConstants(species):
-    decayConstants = [0] * (len(species) + 1)
-
-    if species[0].betaHalfLife != 0.0:
-        raise ValueError("Can not handle having a beta decay for highest Z species")
-
-    for i in range(0, len(species)):
-        if species[i].betaHalfLife <= 0:
-            decayConstants[i] = 0.0
-        else:
-            decayConstants[i] = log(2) / species[i].betaHalfLife
-    return decayConstants
+def createDecayConstants(betaHalfLife):
+    if betaHalfLife <= 0:
+        decayConstant = 0.0
+    else:
+        decayConstant = log(2) / betaHalfLife
+    return decayConstant
 
 def createChargeExchangeRates(Z, A, pressure, ionTemperature):
     chargeExchangeRates = [0] * (Z + 1)
@@ -135,48 +140,43 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     return interactionRate
 
 
-def createDefaultInteractionRates(species, beamEnergy, currentDensity, myfunc, pressure=0, ionTemperature=0, chex=0):
-    interactionRates = createEmptyListofLists(species)
-    for i in range(0, len(species)):
+#def createDefaultInteractionRates(myspecies, beamEnergy, currentDensity, myfunc, pressure=0, ionTemperature=0, chex=0):
+def createDefaultInteractionRates(myspecies, ebitparams, probeFnAddPop, runChargeExchange=0):  # move away from chex=0 and move into object
 
-        if chex == 0:
-            myFuncValues = createInteractionRates(species[i].Z, beamEnergy, currentDensity, myfunc(beamEnergy, species[i].Z))
-        else:
-            myFuncValues = myfunc(species[i].Z, species[i].A, pressure, ionTemperature)
+    interactionRates = createEmptyList(myspecies.Z + 2)
+    if runChargeExchange == 0:
+        myFuncValues = createInteractionRates(myspecies.Z, ebitparams.beamEnergy, ebitparams.currentDensity, probeFnAddPop(ebitparams.beamEnergy, myspecies.Z))
+    else:
+#        myFuncValues = myfunc(species[i].Z, species[i].A, pressure, ionTemperature)
+        myFuncValues = probeFnAddPop(myspecies.Z, myspecies.A, ebitparams.pressure, ebitparams.ionTemperature)
 
-        for r in range(0, len(myFuncValues)):
-            interactionRates[i][r] = myFuncValues[r]
-
+    for r in range(0, len(myFuncValues)):
+        interactionRates[r] = myFuncValues[r]
     return interactionRates
 
 
-def calculateK(chargePopParams, retK, p1, p2, addWFactor):
+def betaDecay(s, q, tstep, ionizationRates, tmpPop):
+    if q >= 1:
+        myval = (-1 * decayConstants[s] * tmpPop[s][q]) + ( decayConstants[s + 1] * tmpPop[s + 1][q])
+    else:
+        myval = 0
+    return tstep * myval
+
+
+def chargeChanges(s, q, tstep, decayConstants, chargeExchangeRates, ionizationRates, rrRates, tmpPop):
+    myval = tstep * ((-1 * ionizationRates[s][q] * tmpPop[s][q]) + ((chargeExchangeRates[s][q + 1] + rrRates[s][q + 1]) * tmpPop[s][q + 1]))
+    return myval
+
+
+def calculateK(chargePopParams, retK, p1, p2, addWFactor, tstep, tmpPop):
+    print(betaDecay(0, 21, tstep, chargePopParams.ionizationRates, tmpPop))
+    sys.exit(0)
     return
 
 
-def rkStep(chargePopParams, tstep, populationT0, populationTtstep, k1, k2, k3, k4, tmp):
-
+def rkStep(chargePopParams, tstep, populationT0, populationTtstep, k1, k2, k3, k4, tmpPop):
+    calculateK(chargePopParams, k1, populationT0, tmpPop, 0.0, tstep, tmpPop)
     return
-
-
-def adaptiveRkStepper(chargePopParams):
-    #  Must create some arrays...
-    k1 = k2 = k3 = k4 = tmp = y1 = y12 = y22 = createEmptyListofLists(chargePopParams.species)
-    time = 0.0
-    nextPrint = 0.0
-    noTooBigSteps = 0
-    step = chargePopParams.rkParams.tStep  # Not sure if there is method to this madness yet..
-    bestStepSize = step  # Currently just translating directly will try to be more nuanced after another pass
-
-    desiredAccuracy = chargePopParams.rkParams.desiredAccuracyPerChargeState / chargePopParams.species[0].Z
-    print(desiredAccuracy)
-    while time <= chargePopParams.breedingTime:
-        if time >= nextPrint:
-            nextPrint = nextPrint + chargePopParams.probeEvery
-            chargePopParams.probeFn(time, chargePopParams)
-        rkStep(chargePopParams, 2 * step, chargePopParams.population, y1, k1, k2, k3, k4, tmp)
-    return
-
 
 def probeFnAddPop(time, chargePopParams):
     #  In the original lisp code this function was passed along to calcChargePopulations
@@ -184,48 +184,80 @@ def probeFnAddPop(time, chargePopParams):
     #  to change to a different function... If someone knows the reasonf for this please
     #  let me know.
     newresult = []
+    print(chargePopParams.chargeStates)
     for charge in chargePopParams.chargeStates:
+        print(chargePopParams.population)
         newresult.append([time, chargePopParams.population[charge - 1]])
     chargePopParams.result.append(newresult)
 
+def adaptiveRkStepper(chargePopParams, probeFnAddPop):
+    #  Must create some arrays...
+    k1 = k2 = k3 = k4 = tmpPop = y1 = y12 = y22 = createEmptyListofLists(chargePopParams.species)
+    time = 0.0
+    nextPrint = 0.0
+    noTooBigSteps = 0
+    step = chargePopParams.rkParams.tStep  # Not sure if there is method to this madness yet..
+    bestStepSize = step  # Currently just translating directly will try to be more nuanced after another pass
 
-def calcChargePopulations(chargePopParams):
+    desiredAccuracy = chargePopParams.rkParams.desiredAccuracyPerChargeState / chargePopParams.species[0].Z
+    while time <= chargePopParams.breedingTime:
+        if time >= nextPrint:
+            nextPrint = nextPrint + chargePopParams.probeEvery
+            print(chargePopParams.probeFn)
+            probeFnAddPop(time, chargePopParams)
+        rkStep(chargePopParams, 2 * step, chargePopParams.population, y1, k1, k2, k3, k4, tmpPop)
+    return
 
-    if chargePopParams.currentDensity is None:
-        chargePopParams.currentDensity = (chargePopParams.ionEbeamOverlap * chargePopParams.beamCurrent) / (pi * (chargePopParams.beamRadius ** 2))
 
-    chargePopParams.species.sort(key=lambda x: x.Z, reverse=True)  # Sort by Z in decending order
+def calcChargePopulations(species, ebitparams, probeFnAddPop):
+    if ebitparams.currentDensity is None:
+        ebitparams.currentDensity = (ebitparams.ionEbeamOverlap * ebitparams.beamCurrent) / (pi * (ebitparams.beamRadius ** 2))
 
-    if chargePopParams.population is None:
-        chargePopParams.population = createDefaultPopulation(chargePopParams.species)
+    species.sort(key=lambda x: x.Z, reverse=True)  # Sort species list by Z in decending order
+    largestZValue = species[0].Z  # We need the largest value for the size of the population array
 
-    if chargePopParams.decayConstants is None:
-        chargePopParams.decayConstants = createDecayConstants(chargePopParams.species)
+    if species[0].betaHalfLife != 0.0:  # The largest Z value species is not allowed to have a beta decay
+        raise ValueError("Can not handle having a beta decay for highest Z species")
 
-    if chargePopParams.ionizationRates is None:
-        chargePopParams.ionizationRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createIonizationCrossSections)
+    for myspecies in species:
 
-    if chargePopParams.rrRates is None:
-        chargePopParams.rrRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createRRCrossSections)
+        myspecies.population = createEmptyList(largestZValue + 2)
+        myspecies.decayConstant = createDecayConstants(myspecies.betaHalfLife)
 
-    if chargePopParams.chexRates is None:
-        chargePopParams.chexRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createChargeExchangeRates, chargePopParams.pressure, chargePopParams.ionTemperature, 1)
+#        species.ionizationRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createIonizationCrossSections)
+        myspecies.ionizationRates = createDefaultInteractionRates(myspecies, ebitparams, createIonizationCrossSections)
 
-    chargePopParams.rkParams = RkStepParams()
+#        species.rrRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createRRCrossSections)
+        myspecies.rrRates = createDefaultInteractionRates(myspecies, ebitparams, createRRCrossSections)
+        #print(myspecies.rrRates)
 
-    adaptiveRkStepper(chargePopParams)
+#        species.chargeExchangeRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createChargeExchangeRates, chargePopParams.pressure, chargePopParams.ionTemperature, 1)
+        myspecies.chargeExchangeRates = createDefaultInteractionRates(myspecies, ebitparams, createChargeExchangeRates, 1)
+        print(myspecies.chargeExchangeRates)
+
+        ebitparams.rkParams = RkStepParams()
+
+#    adaptiveRkStepper(chargePopParams, probeFnAddPop)
+        adaptiveRkStepper(myspecies, ebitparams, probeFnAddPop)
 
     return
 
 
 def main():
-    chargeStates = [39, 40, 41, 42, 43]
+    chargeStates = list([39, 40, 41, 42, 43])
+
     species = []
-    species.append(Species(4, 107, 0.0, 0.0, 7.0))
-    species.append(Species(2, 107, 0.0, 1.0, 6.0))
-    species.append(Species(6, 107, 0.0, 0.0, 5.0))
-    myparams = ChargePopulationParams(species, chargeStates, probeFnAddPop)
-    calcChargePopulations(myparams)
+
+    # rewrite a bunch of this....
+    species.append(Species(51, 121, 0.0, 0.0, 1.0, chargeStates))
+    species.append(Species(22, 122, 0.0, 0.01, 1.0, chargeStates))
+    species.append(Species(54, 123, 0.0, 0.0, 1.0, chargeStates))
+
+
+#    species.append(Species(2, 107, 0.0, 1.0, 6.0))
+#    species.append(Species(6, 107, 0.0, 0.0, 5.0))
+    ebitparams = EbitParams(breedingTime=10.0, beamEnergy=7000.0, pressure=1e-10, beamCurrent=0.02, beamRadius=90e-4)
+    calcChargePopulations(species, ebitparams, probeFnAddPop)
     return
 
 
