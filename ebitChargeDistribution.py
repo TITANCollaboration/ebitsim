@@ -3,7 +3,9 @@ from math import *
 from IonizationEnergies import *
 from rr import *
 import sys
+import copy
 
+myloops = 0
 
 __EMASS__ = 5.11e5  # "Electron mass in eV"
 __C__ = 3.0e10  # "Speed of light"
@@ -31,25 +33,31 @@ class Species:
                  decayConstant=0.0,
                  ionizationRates=None,
                  rrRates=None,
-                 chargeExchangeRates=None):
+                 chargeExchangeRates=None,
+                 k1=[],
+                 k2=[],
+                 k3=[],
+                 k4=[],
+                 tmpPop=[],
+                 y1=[],
+                 y12=[],
+                 y22=[],
+                 results=[]):
         self.Z = Z
         self.A = A
         self.decaysTo = decaysTo
         self.betaHalfLife = betaHalfLife
         self.initSCIPop = initSCIPop
-        self.population = population
         self.decayConstant = decayConstant
-        self.ionizationRates = ionizationRates
-        self.rrRates = rrRates
-        self.chargeExchangeRates = chargeExchangeRates
         self.chargeStates = chargeStates
-
+        self.results = results
 
 # I think I need to move chargeStates up to here.. could concievibly do that for a bunch
 # of the stuff in chargepopparams due to maybe they should be following the species around
 
+
 class RkStepParams:
-    def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-4):
+    def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-7):
         self.minCharge = minCharge
         self.tStep = tStep
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
@@ -67,7 +75,7 @@ class EbitParams:
                  ionTemperature=100.0,
                  currentDensity=None,
                  rkParams=None,
-                 results=[]):
+                 decayConstants=[]):  # I'm throwing decay constants in here so I can have those ready for the beta decay stuff without having to pass all the species objects
         self.breedingTime = breedingTime
         self.probeEvery = probeEvery
         self.ionEbeamOverlap = ionEbeamOverlap
@@ -78,12 +86,11 @@ class EbitParams:
         self.ionTemperature = ionTemperature
         self.currentDensity = currentDensity
         self.rkParams = rkParams
-        self.results = results
+        self.decayConstants = decayConstants
 
-
-def createEmptyListofLists(species):
-    emptylist = [[0.0 for i in range(species[0].Z + 2)] for j in range(len(species) + 1)]  # Init multidimentional array w/ 0's
-    return emptylist
+#def createEmptyListofLists(species):
+#    emptylist = [[0.0 for i in range(species[0].Z + 2)] for j in range(len(species) + 1)]  # Init multidimentional array w/ 0's
+#    return emptylist
 
 
 def createEmptyList(sizeOfArray):
@@ -92,8 +99,8 @@ def createEmptyList(sizeOfArray):
 
 
 #def createDefaultPopulation(species):
-# length of new array needs to be 1+# of species and 2+maxZ value
-    #populationList = createEmptyListofLists(species)
+ #length of new array needs to be 1+# of species and 2+maxZ value
+ #   populationList = createEmptyListofLists(species)
    # for i in range(0, len(species)):
        # populationList[i][1] = species[i].initSCIPop
 #    emptylist = [0.0 for i in range(species[0].Z + 2)]
@@ -155,61 +162,126 @@ def createDefaultInteractionRates(myspecies, ebitparams, probeFnAddPop, runCharg
     return interactionRates
 
 
-def betaDecay(s, q, tstep, ionizationRates, tmpPop):
-    if q >= 1:
-        myval = (-1 * decayConstants[s] * tmpPop[s][q]) + ( decayConstants[s + 1] * tmpPop[s + 1][q])
+def betaDecay(myspecies, species, ebitparams, zindex, tstep):
+    mySpeciesIndex = species.index(myspecies)
+    if zindex >= 1:
+        try:
+            myval = ((-1 * ebitparams.decayConstants[mySpeciesIndex] * myspecies.tmpPop[zindex])
+                     + (ebitparams.decayConstants[mySpeciesIndex + 1] * species[mySpeciesIndex + 1].tmpPop[zindex]))
+        except IndexError:   # *** PLEASE MAKE SURE THIS IS A DECENT ASSUMPTION OF WHAT I SHOULD DO... TEST ME! ***
+            myval = (-1 * ebitparams.decayConstants[mySpeciesIndex] * myspecies.tmpPop[zindex])
     else:
         myval = 0
     return tstep * myval
 
 
-def chargeChanges(s, q, tstep, decayConstants, chargeExchangeRates, ionizationRates, rrRates, tmpPop):
-    myval = tstep * ((-1 * ionizationRates[s][q] * tmpPop[s][q]) + ((chargeExchangeRates[s][q + 1] + rrRates[s][q + 1]) * tmpPop[s][q + 1]))
+def chargeChanges(myspecies, zindex, tstep):
+    myval = 0.0
+    myval = tstep * ((-1 * myspecies.ionizationRates[zindex] * myspecies.tmpPop[zindex])
+                     + ((myspecies.chargeExchangeRates[zindex + 1] + myspecies.rrRates[zindex + 1]) * myspecies.tmpPop[zindex + 1]))
     return myval
 
 
-def calculateK(chargePopParams, retK, p1, p2, addWFactor, tstep, tmpPop):
-    print(betaDecay(0, 21, tstep, chargePopParams.ionizationRates, tmpPop))
-    sys.exit(0)
+def calculateK(ebitparams, myspecies, species, retK, p1, p2, addWFactor, tstep):
+# p2 is p-to-add
+# p1 is population
+    global myloops
+    myloops = myloops + 1
+    for zindex in range(0, myspecies.Z):
+        myspecies.tmpPop[zindex] = p1[zindex] + (p2[zindex] * addWFactor)
+
+    nonDecayLastDelta = 0.0
+    for zindex in range(0, myspecies.Z):  # at some point eval if you need both these loops...
+
+        nonDecayDelta = chargeChanges(myspecies, zindex, tstep)
+        betaDecayDelta = betaDecay(myspecies, species, ebitparams, zindex, tstep)
+        retK[zindex] = (nonDecayDelta - nonDecayLastDelta) + betaDecayDelta
+        nonDecayLastDelta = nonDecayDelta
+#        if myloops > 4000:
+#            sys.exit(0)
+        retK[myspecies.Z] = (-nonDecayLastDelta) + (betaDecay(myspecies, species, ebitparams, zindex, tstep))
+    return retK
+
+def rkStep(ebitparams, myspecies, species, tstep, populationAtT0, populationAtTtstep):
+
+    myspecies.k1 = calculateK(ebitparams, myspecies, species, myspecies.k1, populationAtT0, myspecies.tmpPop, 0.0, tstep)
+    myspecies.k2 = calculateK(ebitparams, myspecies, species, myspecies.k2, populationAtT0, myspecies.k1, 0.5, tstep)
+    myspecies.k3 = calculateK(ebitparams, myspecies, species, myspecies.k3, populationAtT0, myspecies.k2, 0.5, tstep)
+    myspecies.k4 = calculateK(ebitparams, myspecies, species, myspecies.k4, populationAtT0, myspecies.k3, 1.0, tstep)
+
+    for zindex in range(0, myspecies.Z):
+        populationAtTtstep[zindex] = populationAtT0[zindex] + ((1 / 6) * (myspecies.k1[zindex] + (2 * (myspecies.k2[zindex] + myspecies.k3[zindex])) + myspecies.k4[zindex]))
     return
 
 
-def rkStep(chargePopParams, tstep, populationT0, populationTtstep, k1, k2, k3, k4, tmpPop):
-    calculateK(chargePopParams, k1, populationT0, tmpPop, 0.0, tstep, tmpPop)
-    return
-
-def probeFnAddPop(time, chargePopParams):
+def probeFnAddPop(time, ebitparams, myspecies):
     #  In the original lisp code this function was passed along to calcChargePopulations
     #  so for now I will do the same as apparently this is something someone might want
     #  to change to a different function... If someone knows the reasonf for this please
     #  let me know.
-    newresult = []
-    print(chargePopParams.chargeStates)
-    for charge in chargePopParams.chargeStates:
-        print(chargePopParams.population)
-        newresult.append([time, chargePopParams.population[charge - 1]])
-    chargePopParams.result.append(newresult)
+    #newresult = []
+    for chargeIndex in range(0, len(myspecies.chargeStates)):
+        if len(myspecies.results) < len(myspecies.chargeStates):
+            myspecies.results.append([])
 
-def adaptiveRkStepper(chargePopParams, probeFnAddPop):
-    #  Must create some arrays...
-    k1 = k2 = k3 = k4 = tmpPop = y1 = y12 = y22 = createEmptyListofLists(chargePopParams.species)
-    time = 0.0
-    nextPrint = 0.0
-    noTooBigSteps = 0
-    step = chargePopParams.rkParams.tStep  # Not sure if there is method to this madness yet..
-    bestStepSize = step  # Currently just translating directly will try to be more nuanced after another pass
+#    for charge in myspecies.chargeStates:
+    #    print(myspecies.population)
+        print(chargeIndex)
+        myspecies.results[chargeIndex].append([time, myspecies.population[myspecies.chargeStates[chargeIndex]]])
 
-    desiredAccuracy = chargePopParams.rkParams.desiredAccuracyPerChargeState / chargePopParams.species[0].Z
-    while time <= chargePopParams.breedingTime:
-        if time >= nextPrint:
-            nextPrint = nextPrint + chargePopParams.probeEvery
-            print(chargePopParams.probeFn)
-            probeFnAddPop(time, chargePopParams)
-        rkStep(chargePopParams, 2 * step, chargePopParams.population, y1, k1, k2, k3, k4, tmpPop)
+#        myspecies.results[chargeIndex].append([time, myspecies.population[myspecies.chargeStates[chargeIndex] - 1]])
+    #    newresult.append([time, myspecies.population[charge - 1]])
+    #    print("new result")
+    #    print(newresult)
+   # myspecies.results.append(newresult)
+
+
+def adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop):
+    for myspecies in species:
+        time = 0.0
+        nextPrint = 0.0
+        noTooBigSteps = 0
+        step = ebitparams.rkParams.tStep
+        bestStepSize = step
+
+        while time <= ebitparams.breedingTime:
+            if time >= nextPrint:
+                nextPrint = nextPrint + ebitparams.probeEvery
+             #   print("My species pop before func")
+             #   print(myspecies.population)
+                probeFnAddPop(time, ebitparams, myspecies)
+
+            rkStep(ebitparams, myspecies, species, 2 * step, myspecies.population, myspecies.y1)
+            rkStep(ebitparams, myspecies, species, step, myspecies.population, myspecies.y12)
+            rkStep(ebitparams, myspecies, species, step, myspecies.y12, myspecies.y22)
+
+
+        #    time = time + step
+            diff = sum([abs(x - y) for (x, y) in zip(myspecies.y1, myspecies.y22)])  # This just takes a differences and sums all the diffs
+            if diff > 0:
+                bestStepSize = step * ((desiredAccuracy / diff) ** 0.2)
+            else:
+                time = time + step
+                myspecies.population = copy.deepcopy(myspecies.y22)
+                continue  # if we got here then we can skip to the top of the while statement
+            if bestStepSize >= step:
+                time = time + step
+                myspecies.population = copy.deepcopy(myspecies.y22)
+
+            else:
+                noTooBigSteps = noTooBigSteps + 1
+
+            step = 0.9 * bestStepSize
+    print("results")
+    print(myspecies.results)
     return
 
 
 def calcChargePopulations(species, ebitparams, probeFnAddPop):
+    ebitparams.rkParams = RkStepParams()
+
+    desiredAccuracy = ebitparams.rkParams.desiredAccuracyPerChargeState / species[0].Z
+
     if ebitparams.currentDensity is None:
         ebitparams.currentDensity = (ebitparams.ionEbeamOverlap * ebitparams.beamCurrent) / (pi * (ebitparams.beamRadius ** 2))
 
@@ -219,63 +291,54 @@ def calcChargePopulations(species, ebitparams, probeFnAddPop):
     if species[0].betaHalfLife != 0.0:  # The largest Z value species is not allowed to have a beta decay
         raise ValueError("Can not handle having a beta decay for highest Z species")
 
+
     for myspecies in species:
-
+        # Initilize everything ...
         myspecies.population = createEmptyList(largestZValue + 2)
+        myspecies.population[1] = myspecies.initSCIPop
         myspecies.decayConstant = createDecayConstants(myspecies.betaHalfLife)
-
-#        species.ionizationRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createIonizationCrossSections)
+        ebitparams.decayConstants.append(myspecies.decayConstant)
         myspecies.ionizationRates = createDefaultInteractionRates(myspecies, ebitparams, createIonizationCrossSections)
-
-#        species.rrRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createRRCrossSections)
         myspecies.rrRates = createDefaultInteractionRates(myspecies, ebitparams, createRRCrossSections)
-        #print(myspecies.rrRates)
-
-#        species.chargeExchangeRates = createDefaultInteractionRates(chargePopParams.species, chargePopParams.beamEnergy, chargePopParams.currentDensity, createChargeExchangeRates, chargePopParams.pressure, chargePopParams.ionTemperature, 1)
         myspecies.chargeExchangeRates = createDefaultInteractionRates(myspecies, ebitparams, createChargeExchangeRates, 1)
-        print(myspecies.chargeExchangeRates)
+        myspecies.k1 = createEmptyList(species[0].Z + 2)
+        myspecies.k2 = createEmptyList(species[0].Z + 2)
+        myspecies.k3 = createEmptyList(species[0].Z + 2)
+        myspecies.k4 = createEmptyList(species[0].Z + 2)
+        myspecies.tmpPop = createEmptyList(species[0].Z + 2)
+        myspecies.y1 = createEmptyList(species[0].Z + 2)
+        myspecies.y12 = createEmptyList(species[0].Z + 2)
+        myspecies.y22 = createEmptyList(species[0].Z + 2)
+        myspecies.results = []
+        print(myspecies.results)
 
-        ebitparams.rkParams = RkStepParams()
 
-#    adaptiveRkStepper(chargePopParams, probeFnAddPop)
-        adaptiveRkStepper(myspecies, ebitparams, probeFnAddPop)
-
+    adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop)  # this does all the heavy lifting
     return
 
-
 def main():
-    chargeStates = list([39, 40, 41, 42, 43])
+    chargeStates = [39, 40, 41, 42, 43]
 
     species = []
 
     # rewrite a bunch of this....
-    species.append(Species(51, 121, 0.0, 0.0, 1.0, chargeStates))
-    species.append(Species(22, 122, 0.0, 0.01, 1.0, chargeStates))
-    species.append(Species(54, 123, 0.0, 0.0, 1.0, chargeStates))
+    species.append(Species(51, 129, 0.0, 0.0, 1.0, chargeStates))
+  #  species.append(Species(22, 122, 0.0, 0.01, 1.0, chargeStates))
+  #  species.append(Species(54, 123, 0.0, 0.0, 1.0, chargeStates))
+  #  species.append(Species(4, 107, 0.0, 0.0, 7.0, chargeStates))
+ #   species.append(Species(2, 107, 0.0, 1.0, 6.0, chargeStates))
+ #   species.append(Species(6, 107, 0.0, 0.0, 5.0, chargeStates))
+ #(setf myspecies (list
+ #            (make-species :z 4 :a 107 :beta-half-life 0.0d0 :initial-sci-population 7d0)
+ #            (make-species :z 2 :a 107 :initial-sci-population 6d0 :beta-half-life 1.0d0)
+ #            (make-species :z 6 :a 107 :beta-half-life 0.0d0 :initial-sci-population 5d0)))
 
 
 #    species.append(Species(2, 107, 0.0, 1.0, 6.0))
 #    species.append(Species(6, 107, 0.0, 0.0, 5.0))
-    ebitparams = EbitParams(breedingTime=10.0, beamEnergy=7000.0, pressure=1e-10, beamCurrent=0.02, beamRadius=90e-4)
+    ebitparams = EbitParams(breedingTime=11.0, beamEnergy=7000.0, pressure=1e-10, beamCurrent=0.02, beamRadius=90e-4, probeEvery=1.0)
+
     calcChargePopulations(species, ebitparams, probeFnAddPop)
-    return
+    return 0
 
-
-def testpopdata():
-    result = [1.0773715045951986e-10,-2.5221903096086526e-10,2.3449007288242245e-10, \
-        -1.2221336132501444e-10,4.026919164871968e-11,-9.343245253069252e-12, \
-        1.4314856326808133e-12,-1.6629498403738547e-13,1.5050512947015083e-14, \
-        -1.0786148204346698e-15,6.280613072141581e-17,-2.9130702329533736e-18, \
-        1.1194883347241496e-19,-3.586879680201691e-21,9.650587100702459e-23, \
-        -2.1886639635205885e-24,5.455806595921941e-26,1.684653698776325e-26, \
-        1.3161935364266835e-26,5.531656225764603e-27,3.2398603494337613e-28, \
-        -1.0338100473059566e-27,-2.8913558824647924e-27,-8.991390624069855e-27, \
-        -1.2091860673384666e-26,2.0231038762218803e-26,7.085002901940573e-24, \
-        1.2688700954569216e-21,1.8624840081805598e-19,2.210926329822218e-17, \
-        2.116430358816347e-15,1.6355013404941251e-13,1.0084173983337306e-11, \
-        4.937354709682791e-10,2.039748431910559e-8,6.670812700176424e-7, \
-        1.6861321657554175e-5,3.2227812666130867e-4,0.004264150985831597e0, \
-        0.03850582390819178e0,0.22895681488195369e0,0.5902408926186803e0, \
-        0.1329114487663367e0,0.004781041407944411e0,0.0e0,0.0e0,0.0e0,0.0e0,0.0e0, \
-        0.0e0,0.0e0,0.0e0,0.0e0]
-    return result
+main()
