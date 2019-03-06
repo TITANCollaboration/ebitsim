@@ -216,12 +216,11 @@ def adaptiveRkStepper(species, ebitparams, probeFnAddPop):
             if time >= nextPrint:
                 nextPrint = nextPrint + ebitparams.probeEvery
                 probeFnAddPop(time, ebitparams, myspecies)
+
             rkStep(ebitparams, myspecies, species, 2 * step, myspecies.population, myspecies.y1)
             rkStep(ebitparams, myspecies, species, step, myspecies.population, myspecies.y12)
             rkStep(ebitparams, myspecies, species, step, myspecies.y12, myspecies.y22)
 
-
-        #    time = time + step
             diff = sum([abs(x - y) for (x, y) in zip(myspecies.y1, myspecies.y22)])  # This just takes a differences and sums all the diffs
 
             if diff > 0:
@@ -237,7 +236,7 @@ def adaptiveRkStepper(species, ebitparams, probeFnAddPop):
                 noTooBigSteps = noTooBigSteps + 1
 
             step = 0.9 * bestStepSize
-        print(myspecies.results)
+        # print(myspecies.results)
     return
 
 def initEverything(species, ebitparams):
@@ -285,6 +284,7 @@ def calcChargePopulations(species, ebitparams, probeFnAddPop):
         initEverything(species, ebitparams)
 
     adaptiveRkStepper(species, ebitparams, probeFnAddPop)  # this does all the heavy lifting
+
     return
 
 
