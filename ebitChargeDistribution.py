@@ -16,7 +16,7 @@ __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
 
 __MAXCHARGE__ = 105
 __MAXSPECIES__ = 1000
-
+INITILIZEDEVERYTHING = 0
 
 class Species:
     def __init__(self,
@@ -54,11 +54,11 @@ class Species:
 
 
 class RkStepParams:
-    def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-7):
+    def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-7, desiredAccuracy=0):
         self.minCharge = minCharge
         self.tStep = tStep
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
-
+        self.desiredAccuracy = desiredAccuracy
 
 class EbitParams:
     def __init__(self,
@@ -204,7 +204,7 @@ def probeFnAddPop(time, ebitparams, myspecies):
         myspecies.results[chargeIndex].append([time, myspecies.population[myspecies.chargeStates[chargeIndex]]])
 
 
-def adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop):
+def adaptiveRkStepper(species, ebitparams, probeFnAddPop):
     for myspecies in species:
         time = 0.0
         nextPrint = 0.0
@@ -225,7 +225,7 @@ def adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop):
             diff = sum([abs(x - y) for (x, y) in zip(myspecies.y1, myspecies.y22)])  # This just takes a differences and sums all the diffs
 
             if diff > 0:
-                bestStepSize = step * ((desiredAccuracy / diff) ** 0.2)
+                bestStepSize = step * ((ebitparams.rkParams.desiredAccuracy / diff) ** 0.2)
             else:
                 time = time + step
                 myspecies.population = copy.copy(myspecies.y22)
@@ -237,23 +237,23 @@ def adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop):
                 noTooBigSteps = noTooBigSteps + 1
 
             step = 0.9 * bestStepSize
+        print(myspecies.results)
     return
 
+def initEverything(species, ebitparams):
+    global INITILIZEDEVERYTHING
 
-def calcChargePopulations(species, ebitparams, probeFnAddPop):
     ebitparams.rkParams = RkStepParams()
 
-    desiredAccuracy = ebitparams.rkParams.desiredAccuracyPerChargeState / species[0].Z
+    ebitparams.rkParams.desiredAccuracy = ebitparams.rkParams.desiredAccuracyPerChargeState / species[0].Z
 
-    if ebitparams.currentDensity is None:
-        ebitparams.currentDensity = (ebitparams.ionEbeamOverlap * ebitparams.beamCurrent) / (pi * (ebitparams.beamRadius ** 2))
+    ebitparams.currentDensity = (ebitparams.ionEbeamOverlap * ebitparams.beamCurrent) / (pi * (ebitparams.beamRadius ** 2))
 
     species.sort(key=lambda x: x.Z, reverse=True)  # Sort species list by Z in decending order
     largestZValue = species[0].Z  # We need the largest value for the size of the population array
 
     if species[0].betaHalfLife != 0.0:  # The largest Z value species is not allowed to have a beta decay
         raise ValueError("Can not handle having a beta decay for highest Z species")
-
 
     for myspecies in species:
         # Initilize everything ...
@@ -277,18 +277,24 @@ def calcChargePopulations(species, ebitparams, probeFnAddPop):
         myspecies.y12 = createEmptyList(species[0].Z + 2)
         myspecies.y22 = createEmptyList(species[0].Z + 2)
         myspecies.results = []
+    INITILIZEDEVERYTHING = 1
 
-    adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop)  # this does all the heavy lifting
+
+def calcChargePopulations(species, ebitparams, probeFnAddPop):
+    if INITILIZEDEVERYTHING == 0:
+        initEverything(species, ebitparams)
+
+    adaptiveRkStepper(species, ebitparams, probeFnAddPop)  # this does all the heavy lifting
     return
 
 
-def main():
-    chargeStates = [39, 40, 41, 42, 43]
+#def main():
+#    chargeStates = [39, 40, 41, 42, 43]
 
-    species = []
+#    species = []
 
     # rewrite a bunch of this....
-    species.append(Species(51, 129, 0.0, 0.0, 1.0, chargeStates))
+#    species.append(Species(51, 129, 0.0, 0.0, 1.0, chargeStates))
   #  species.append(Species(22, 122, 0.0, 0.01, 1.0, chargeStates))
   #  species.append(Species(54, 123, 0.0, 0.0, 1.0, chargeStates))
   #  species.append(Species(4, 107, 0.0, 0.0, 7.0, chargeStates))
@@ -296,9 +302,9 @@ def main():
  #   species.append(Species(6, 107, 0.0, 0.0, 5.0, chargeStates))
 #    species.append(Species(2, 107, 0.0, 1.0, 6.0))
 #    species.append(Species(6, 107, 0.0, 0.0, 5.0))
-    ebitparams = EbitParams(breedingTime=11.0, beamEnergy=7000.0, pressure=1e-10, beamCurrent=0.02, beamRadius=90e-4, probeEvery=1.0)
+#    ebitparams = EbitParams(breedingTime=11.0, beamEnergy=7000.0, pressure=1e-10, beamCurrent=0.02, beamRadius=90e-4, probeEvery=1.0)
 
-    calcChargePopulations(species, ebitparams, probeFnAddPop)
-    return 0
+#    calcChargePopulations(species, ebitparams, probeFnAddPop)
+#    return 0
 
-main()
+#main()
