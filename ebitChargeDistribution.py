@@ -2,10 +2,7 @@
 from math import *
 from IonizationEnergies import *
 from rr import *
-import sys
 import copy
-
-myloops = 0
 
 __EMASS__ = 5.11e5  # "Electron mass in eV"
 __C__ = 3.0e10  # "Speed of light"
@@ -90,23 +87,10 @@ class EbitParams:
         self.decayConstants = decayConstants
         self.ignoreBetaDecay = ignoreBetaDecay
 
-#def createEmptyListofLists(species):
-#    emptylist = [[0.0 for i in range(species[0].Z + 2)] for j in range(len(species) + 1)]  # Init multidimentional array w/ 0's
-#    return emptylist
-
 
 def createEmptyList(sizeOfArray):
     myEmptyList = [0.0 for i in range(sizeOfArray)]
     return myEmptyList
-
-
-#def createDefaultPopulation(species):
- #length of new array needs to be 1+# of species and 2+maxZ value
- #   populationList = createEmptyListofLists(species)
-   # for i in range(0, len(species)):
-       # populationList[i][1] = species[i].initSCIPop
-#    emptylist = [0.0 for i in range(species[0].Z + 2)]
-#    return populationList
 
 
 def createDecayConstants(betaHalfLife):
@@ -115,6 +99,7 @@ def createDecayConstants(betaHalfLife):
     else:
         decayConstant = log(2) / betaHalfLife
     return decayConstant
+
 
 def createChargeExchangeRates(Z, A, pressure, ionTemperature):
     chargeExchangeRates = [0] * (Z + 1)
@@ -125,7 +110,6 @@ def createChargeExchangeRates(Z, A, pressure, ionTemperature):
     avgIonV = __C__ * sqrt(8.0 * (ionTemperature / (pi * ionMassInAMU)))
     avgIonVinBohr = avgIonV / __VBOHR__
     sigV = __CHEXCONST__ * log( 15.0 / avgIonVinBohr) * avgIonV
-
 
     for i in range(1, Z + 1):
         chargeExchangeRates[i] = i * sigV * h2Density
@@ -149,14 +133,12 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     return interactionRate
 
 
-#def createDefaultInteractionRates(myspecies, beamEnergy, currentDensity, myfunc, pressure=0, ionTemperature=0, chex=0):
 def createDefaultInteractionRates(myspecies, ebitparams, probeFnAddPop, runChargeExchange=0):  # move away from chex=0 and move into object
 
     interactionRates = createEmptyList(myspecies.Z + 2)
     if runChargeExchange == 0:
         myFuncValues = createInteractionRates(myspecies.Z, ebitparams.beamEnergy, ebitparams.currentDensity, probeFnAddPop(ebitparams.beamEnergy, myspecies.Z))
     else:
-#        myFuncValues = myfunc(species[i].Z, species[i].A, pressure, ionTemperature)
         myFuncValues = probeFnAddPop(myspecies.Z, myspecies.A, ebitparams.pressure, ebitparams.ionTemperature)
 
     for r in range(0, len(myFuncValues)):
@@ -177,12 +159,6 @@ def betaDecay(myspecies, species, ebitparams, zindex, tstep):
     return tstep * myval
 
 
-#def chargeChanges(myspecies, zindex, tstep):
-#    myval = 0.0
-#    myval = tstep * ((-1 * myspecies.ionizationRates[zindex] * myspecies.tmpPop[zindex])
-#                     + ((myspecies.chargeExchangeRates[zindex + 1] + myspecies.rrRates[zindex + 1]) * myspecies.tmpPop[zindex + 1]))
-#    return myval
-#@profile
 def calculateK(ebitparams, myspecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates,  retK, p1, p2, addWFactor, tstep):
     betaDecayDelta = 0
     nonDecayLastDelta = 0.0
@@ -192,7 +168,6 @@ def calculateK(ebitparams, myspecies, species, tmpPop, Z, ionizationRates, charg
 
     for zindex in range(0, Z):  # at some point eval if you need both these loops...
         # Used to use chargeChanges but it was a little faster having this inline
-     #   nonDecayDelta = 0
         nonDecayDelta = tstep * ((-1 * ionizationRates[zindex] * tmpPop[zindex])
                                  + ((chargeExchangeRates[zindex + 1] + rrRates[zindex + 1]) * tmpPop[zindex + 1]))
 
@@ -201,22 +176,17 @@ def calculateK(ebitparams, myspecies, species, tmpPop, Z, ionizationRates, charg
 
         retK[zindex] = (nonDecayDelta - nonDecayLastDelta) + betaDecayDelta
         nonDecayLastDelta = nonDecayDelta
- #       retK[myspecies.Z] = (-nonDecayLastDelta) + (betaDecay(myspecies, species, ebitparams, zindex, tstep))
         retK[Z] = (-nonDecayLastDelta) + betaDecayDelta
 
     return retK
 
 
-
 def rkStep(ebitparams, myspecies, species, tstep, populationAtT0, populationAtTtstep):
-
     # longer function param calls yes but it speeds it up calculateK by 10%...
-
     myspecies.k1 = calculateK(ebitparams, myspecies, species, myspecies.tmpPop, myspecies.Z, myspecies.ionizationRates, myspecies.chargeExchangeRates, myspecies.rrRates, myspecies.k1, populationAtT0, myspecies.tmpPop, 0.0, tstep)
     myspecies.k2 = calculateK(ebitparams, myspecies, species, myspecies.tmpPop, myspecies.Z, myspecies.ionizationRates, myspecies.chargeExchangeRates, myspecies.rrRates, myspecies.k2, populationAtT0, myspecies.k1, 0.5, tstep)
     myspecies.k3 = calculateK(ebitparams, myspecies, species, myspecies.tmpPop, myspecies.Z, myspecies.ionizationRates, myspecies.chargeExchangeRates, myspecies.rrRates, myspecies.k3, populationAtT0, myspecies.k2, 0.5, tstep)
     myspecies.k4 = calculateK(ebitparams, myspecies, species, myspecies.tmpPop, myspecies.Z, myspecies.ionizationRates, myspecies.chargeExchangeRates, myspecies.rrRates, myspecies.k4, populationAtT0, myspecies.k3, 1.0, tstep)
-
 
     for zindex in range(0, myspecies.Z):
         populationAtTtstep[zindex] = populationAtT0[zindex] + ((1 / 6) * (myspecies.k1[zindex] + (2 * (myspecies.k2[zindex] + myspecies.k3[zindex])) + myspecies.k4[zindex]))
@@ -226,9 +196,8 @@ def rkStep(ebitparams, myspecies, species, tstep, populationAtT0, populationAtTt
 def probeFnAddPop(time, ebitparams, myspecies):
     #  In the original lisp code this function was passed along to calcChargePopulations
     #  so for now I will do the same as apparently this is something someone might want
-    #  to change to a different function... If someone knows the reasonf for this please
+    #  to change to a different function... If someone knows the reason for this please
     #  let me know.
-    #newresult = []
     for chargeIndex in range(0, len(myspecies.chargeStates)):
         if len(myspecies.results) < len(myspecies.chargeStates):
             myspecies.results.append([])
@@ -268,9 +237,6 @@ def adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop):
                 noTooBigSteps = noTooBigSteps + 1
 
             step = 0.9 * bestStepSize
-    print("results")
-    print(myspecies.results)
-    print("My loops : %s" % myloops)
     return
 
 
@@ -315,6 +281,7 @@ def calcChargePopulations(species, ebitparams, probeFnAddPop):
     adaptiveRkStepper(species, ebitparams, desiredAccuracy, probeFnAddPop)  # this does all the heavy lifting
     return
 
+
 def main():
     chargeStates = [39, 40, 41, 42, 43]
 
@@ -327,9 +294,6 @@ def main():
   #  species.append(Species(4, 107, 0.0, 0.0, 7.0, chargeStates))
  #   species.append(Species(2, 107, 0.0, 1.0, 6.0, chargeStates))
  #   species.append(Species(6, 107, 0.0, 0.0, 5.0, chargeStates))
-
-
-
 #    species.append(Species(2, 107, 0.0, 1.0, 6.0))
 #    species.append(Species(6, 107, 0.0, 0.0, 5.0))
     ebitparams = EbitParams(breedingTime=11.0, beamEnergy=7000.0, pressure=1e-10, beamCurrent=0.02, beamRadius=90e-4, probeEvery=1.0)
