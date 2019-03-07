@@ -9,6 +9,7 @@
 
 import argparse
 import configparser
+import csv
 import ebitChargeDistribution
 from ebitChargeDistribution import probeFnAddPop
 
@@ -30,6 +31,15 @@ def column(matrix, index):
     return mycolumn
 
 
+def getElementAbv(z):
+    with open('PeriodicTable.csv', newline='') as csvfile:
+        elements = csv.reader(csvfile, delimiter=',', quotechar='|')
+        for row in elements:
+            if row[0] == str(z):
+                abv = row[2]
+    return abv
+
+
 def plotSpeciesResults(species, ebitparams, outputConfig):
     #  Plot all species and charge state populations vs. time via matplotlib
 
@@ -38,13 +48,14 @@ def plotSpeciesResults(species, ebitparams, outputConfig):
     import matplotlib.pyplot as plt
 
     plt.rcParams['legend.loc'] = 'best'
-    plt.ylabel('% Charge Breeding')
-    plt.xlabel('Time after time')
-    plt.title('Charge Breeding for stuff and things')
+    plt.ylabel('Population (%)')
+    plt.xlabel('Breeding time (s)')
+    plt.title("I_e = %.2fA, V_e = %ieV, r_e = %.2Ecm, P_H = %.2ET" % (ebitparams.beamCurrent, ebitparams.beamEnergy, ebitparams.beamRadius, ebitparams.pressure))
 
     for myspecies in species:
         for chargeStateResults in range(0, len(myspecies.results)):
-            plt.plot(column(myspecies.results[chargeStateResults], 0), column(myspecies.results[chargeStateResults], 1), label=myspecies.chargeStates[chargeStateResults])
+            mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults]) + '+'
+            plt.plot(column(myspecies.results[chargeStateResults], 0), column(myspecies.results[chargeStateResults], 1), label=mylabel)
     plt.legend(framealpha=0.5)
 
     plt.savefig(outputConfig.outputFileName, dpi=300)

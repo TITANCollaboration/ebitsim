@@ -13,3 +13,5 @@ pypy3 ebitsim.py -z 51 -a 129 --charge_states 39 40 41 42 43 --probe_every 0.001
 
 Using config file:
 pypy3 ebitsim.py --config_file ebitsim.cfg
+
+Grabbed periodic table of elements csv from : https://gist.github.com/GoodmanSciences/c2dd862cd38f21b0ad36b8f96b4bf1ee  Thank you!
