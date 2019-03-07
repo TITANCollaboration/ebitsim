@@ -211,6 +211,7 @@ def adaptiveRkStepper(species, ebitparams, probeFnAddPop):
         noTooBigSteps = 0
         step = ebitparams.rkParams.tStep
         bestStepSize = step
+        print("Simulating Species : %s" % myspecies.Z)
 
         while time <= ebitparams.breedingTime:
             if time >= nextPrint:

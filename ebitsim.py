@@ -16,13 +16,23 @@ import platform
 import sys
 import os
 
+# I suspect this class will grow with some additional options as they become needed
+class OutputFormating:
+    def __init__(self, outputFileName='output.png', outputType='matplotlib'):
+        self.outputFileName = outputFileName
+        self.outputType = outputType
+
 
 def column(matrix, index):
+    # Simple function to be able to pull out a single column of data from a list of lists, this lets us plot easily
+    # as we can extract out our x,y values
     mycolumn = [i[index] for i in matrix]
     return mycolumn
 
 
-def plotSpeciesResults(species, ebitparams, fileName):
+def plotSpeciesResults(species, ebitparams, outputConfig):
+    #  Plot all species and charge state populations vs. time via matplotlib
+
     import matplotlib
     matplotlib.use("TKAgg")  # This is done as otherwise it goes wierd with a MacOS
     import matplotlib.pyplot as plt
@@ -31,16 +41,29 @@ def plotSpeciesResults(species, ebitparams, fileName):
     plt.ylabel('% Charge Breeding')
     plt.xlabel('Time after time')
     plt.title('Charge Breeding for stuff and things')
+
     for myspecies in species:
         for chargeStateResults in range(0, len(myspecies.results)):
             plt.plot(column(myspecies.results[chargeStateResults], 0), column(myspecies.results[chargeStateResults], 1), label=myspecies.chargeStates[chargeStateResults])
     plt.legend(framealpha=0.5)
 
-    plt.savefig('mine.png', dpi=300)
+    plt.savefig(outputConfig.outputFileName, dpi=300)
+    return
+
+
+def runSimulation(species, ebitparams, probeFnAddPop, outputConfig):
+    #  Runs the actual simulation via ebitChargeDistribution.calcChargePopulations and then determines how to handle the output
+    print("Running simulation! ....")
+    ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
+
+    if outputConfig.outputType == 'matplotlib':
+        print("Writing graph to : %s" % outputConfig.outputFileName)
+        plotSpeciesResults(species, ebitparams, outputConfig)
     return
 
 
 def getConfigEntry(config, heading, item, reqd=False, remove_spaces=True, default_val=''):
+    #  Just a helper function to process config file lines, strip out white spaces and check if requred etc.
     if config.has_option(heading, item):
         if remove_spaces:
             config_item = config.get(heading, item).replace(" ", "")
@@ -54,9 +77,9 @@ def getConfigEntry(config, heading, item, reqd=False, remove_spaces=True, defaul
     return config_item
 
 
-def buildAndRunClassesFromConfig(configFileName):
+def processConfigFile(configFileName):
     #
-    # We will read the entire cnofig file here and push it into a class
+    # We will read the entire config file here and push it into a different classes and then call runSimulation()
     #
     config = configparser.RawConfigParser()
     baseDir = os.path.dirname(os.path.realpath(__file__))[:-3]
@@ -64,12 +87,13 @@ def buildAndRunClassesFromConfig(configFileName):
     if os.path.exists(configFileName):
         config.read(configFileName)
         ebitparams = ebitChargeDistribution.EbitParams()
+        outputConfig = OutputFormating()
 
         configSections = config.sections()
 
         # Read output information
-        outputType = getConfigEntry(config, 'Output', 'outputType', reqd=True, remove_spaces=True)
-        outputFileName = getConfigEntry(config, 'Output', 'outputFileName', reqd=True, remove_spaces=True)
+        outputConfig.outputType = getConfigEntry(config, 'Output', 'outputType', reqd=True, remove_spaces=True)
+        outputConfig.outputFileName = getConfigEntry(config, 'Output', 'outputFileName', reqd=True, remove_spaces=True)
 
         # Read in Beam information
         ebitparams.beamEnergy = float(getConfigEntry(config, 'BeamAndTrap', 'beamEnergy', reqd=True, remove_spaces=True))
@@ -95,22 +119,25 @@ def buildAndRunClassesFromConfig(configFileName):
         print("Config file does not appear to exist : %s" % configFileName)
         sys.exit(1)
 
-    ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
-    plotSpeciesResults(species, ebitparams, 'mine.png')
-
+#    ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
+#    plotSpeciesResults(species, ebitparams, outputFileName)
+    runSimulation(species, ebitparams, probeFnAddPop, outputConfig)
     return 0
 
 
-def buildAndRunClassesFromArgs(args, output='plot'):
+def processCommandLine(args):
+    #  Process command line arguments and then call runSimulation()
+    outputConfig = OutputFormating()
     species = []
+    outputConfig.outputType = args.outputType
+    outputConfig.outputFileName = args.outputFileName
 
     # rewrite a bunch of this....
     species.append(ebitChargeDistribution.Species(args.protons, args.nucleons, 0.0, 0.0, 1.0, args.chargeStates))
     ebitparams = ebitChargeDistribution.EbitParams(breedingTime=args.breedingTime, beamEnergy=args.beamEnergy, pressure=args.pressure, beamCurrent=args.beamCurrent, beamRadius=args.beamRadius, probeEvery=args.probeEvery)
-    ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
 
-    if output == 'plot':
-        plotSpeciesResults(species, ebitparams, 'mine.png')
+    runSimulation(species, ebitparams, probeFnAddPop, outputConfig)
+
     return
 
 
@@ -120,6 +147,10 @@ def main():
 
     parser.add_argument('--config_file', dest='configFile', required=False,
                         help="Specify the complete path to the config file, by default we'll use ebitsim.cfg")
+    parser.add_argument('--output_type', dest='outputType', default='matplotlib', required=False,
+                        help="Specify how to output the data, defaults to a matplotlib graph, csv will be available at some point")
+    parser.add_argument('--output_file', dest='outputFileName', default='output.png', required=False,
+                        help="Specify filename for csv or png file, please include .csv or .png extension")
     parser.add_argument('-z', dest='protons', type=int, default=0, required=False,
                         help="Specify the num of protons")
     parser.add_argument('-a', dest='nucleons', type=int, required=False,
@@ -147,9 +178,9 @@ def main():
         print("*** !!WARNING!! : While this can run via normal cPython it is highly recommended that you run it via pypy3 for a HUGE speedup ***")
 
     if args.protons != 0:
-        buildAndRunClassesFromArgs(args)
+        processCommandLine(args)
     else:
-        buildAndRunClassesFromConfig(args.configFile)
+        processConfigFile(args.configFile)
 
 if __name__ == "__main__":
     main()
