@@ -1,5 +1,5 @@
 # ebitsim
-EBIT simulator for ionization
+EBIT simulator for ion breeding
 
 
 REQUIRES PYTHON3

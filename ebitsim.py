@@ -54,7 +54,7 @@ def getConfigEntry(config, heading, item, reqd=False, remove_spaces=True, defaul
     return config_item
 
 
-def processConfigFile(configFileName):
+def buildAndRunClassesFromConfig(configFileName):
     #
     # We will read the entire cnofig file here and push it into a class
     #
@@ -88,9 +88,9 @@ def processConfigFile(configFileName):
         for myspecies in speciesList:      # Collect all the species and parameters for each
             protons = int(getConfigEntry(config, myspecies, 'z', reqd=True, remove_spaces=True))
             nucleons = int(getConfigEntry(config, myspecies, 'nucleons', reqd=True, remove_spaces=True))
+            population = float(getConfigEntry(config, myspecies, 'populationPercent', reqd=True, remove_spaces=True))
             chargeStates = list(map(int, getConfigEntry(config, myspecies, 'chargeStates', reqd=True, remove_spaces=True).split(",")))
-            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, 0.0, 1.0, chargeStates))
-            print(species[-1].chargeStates)
+            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, 0.0, population, chargeStates))
     else:
         print("Config file does not appear to exist : %s" % configFileName)
         sys.exit(1)
@@ -113,15 +113,11 @@ def buildAndRunClassesFromArgs(args, output='plot'):
         plotSpeciesResults(species, ebitparams, 'mine.png')
     return
 
+
 def main():
 
     parser = argparse.ArgumentParser(description='EBIT Charge Breeding Simulation')
-#    parser.add_argument('--init', dest='init', action='store_true',
-#                        help='Initialize the database if this is the first time running this')
-#    parser.add_argument('--server', dest='server', action='store_true',
-#                        help='Start a Still Task Server')
-#    parser.add_argument('--client', dest='client', action='store_true',
-#                        help='Start a Still Task Client')
+
     parser.add_argument('--config_file', dest='configFile', required=False,
                         help="Specify the complete path to the config file, by default we'll use ebitsim.cfg")
     parser.add_argument('-z', dest='protons', type=int, default=0, required=False,
@@ -153,7 +149,7 @@ def main():
     if args.protons != 0:
         buildAndRunClassesFromArgs(args)
     else:
-        processConfigFile(args.configFile)
+        buildAndRunClassesFromConfig(args.configFile)
 
 if __name__ == "__main__":
     main()
