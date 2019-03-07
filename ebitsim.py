@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 # Jon Ringuette - 03/2019
 
+# I know in python one is supposed to use snake_case instead of camelCase but I kind of liked camelCase for this
+# program better and I stuck with it throughout...  If someone is disturbed by this i'm happy to change it.
+# other than that I have kept everything PEP8 complient for the most part except line length because we
+# all have widescreen monitors these days..
+
+
 import argparse
 import configparser
 import ebitChargeDistribution
@@ -8,17 +14,18 @@ from ebitChargeDistribution import probeFnAddPop
 
 import platform
 import sys
+import os
+
 
 def column(matrix, index):
     mycolumn = [i[index] for i in matrix]
     return mycolumn
 
 
-def plotSpeciesResults(species, ebitparams):
+def plotSpeciesResults(species, ebitparams, fileName):
     import matplotlib
     matplotlib.use("TKAgg")  # This is done as otherwise it goes wierd with a MacOS
     import matplotlib.pyplot as plt
-
 
     plt.rcParams['legend.loc'] = 'best'
     plt.ylabel('% Charge Breeding')
@@ -33,6 +40,67 @@ def plotSpeciesResults(species, ebitparams):
     return
 
 
+def getConfigEntry(config, heading, item, reqd=False, remove_spaces=True, default_val=''):
+    if config.has_option(heading, item):
+        if remove_spaces:
+            config_item = config.get(heading, item).replace(" ", "")
+        else:
+            config_item = config.get(heading, item)
+    elif reqd:
+        print("The required config file setting \'%s\' under [%s] is missing") % (item, heading)
+        sys.exit(1)
+    else:
+        config_item = default_val
+    return config_item
+
+
+def processConfigFile(configFileName):
+    #
+    # We will read the entire cnofig file here and push it into a class
+    #
+    config = configparser.RawConfigParser()
+    baseDir = os.path.dirname(os.path.realpath(__file__))[:-3]
+
+    if os.path.exists(configFileName):
+        config.read(configFileName)
+        ebitparams = ebitChargeDistribution.EbitParams()
+
+        configSections = config.sections()
+
+        # Read output information
+        outputType = getConfigEntry(config, 'Output', 'outputType', reqd=True, remove_spaces=True)
+        outputFileName = getConfigEntry(config, 'Output', 'outputFileName', reqd=True, remove_spaces=True)
+
+        # Read in Beam information
+        ebitparams.beamEnergy = float(getConfigEntry(config, 'BeamAndTrap', 'beamEnergy', reqd=True, remove_spaces=True))
+        ebitparams.breedingTime = float(getConfigEntry(config, 'BeamAndTrap', 'breedingTime', reqd=True, remove_spaces=True))
+        ebitparams.probeEvery = float(getConfigEntry(config, 'BeamAndTrap', 'probeEvery', reqd=True, remove_spaces=True))
+        ebitparams.ionEbeamOverlap = float(getConfigEntry(config, 'BeamAndTrap', 'ionEbeamOverlap', reqd=True, remove_spaces=True))
+        ebitparams.beamCurrent = float(getConfigEntry(config, 'BeamAndTrap', 'beamCurrent', reqd=True, remove_spaces=True))
+        ebitparams.beamRadius = float(getConfigEntry(config, 'BeamAndTrap', 'beamRadius', reqd=True, remove_spaces=True))
+        ebitparams.pressure = float(getConfigEntry(config, 'BeamAndTrap', 'pressure', reqd=True, remove_spaces=True))
+        ebitparams.ionTemperature = float(getConfigEntry(config, 'BeamAndTrap', 'ionTemperature', reqd=True, remove_spaces=True))
+
+        # Read in Run section
+        speciesList = tuple(getConfigEntry(config, 'Run', 'speciesList', reqd=True, remove_spaces=True).split(","))
+        species = []
+
+        for myspecies in speciesList:      # Collect all the species and parameters for each
+            protons = int(getConfigEntry(config, myspecies, 'z', reqd=True, remove_spaces=True))
+            nucleons = int(getConfigEntry(config, myspecies, 'nucleons', reqd=True, remove_spaces=True))
+            chargeStates = list(map(int, getConfigEntry(config, myspecies, 'chargeStates', reqd=True, remove_spaces=True).split(",")))
+            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, 0.0, 1.0, chargeStates))
+            print(species[-1].chargeStates)
+    else:
+        print("Config file does not appear to exist : %s" % configFileName)
+        sys.exit(1)
+
+    ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
+    plotSpeciesResults(species, ebitparams, 'mine.png')
+
+    return 0
+
+
 def buildAndRunClassesFromArgs(args, output='plot'):
     species = []
 
@@ -42,9 +110,8 @@ def buildAndRunClassesFromArgs(args, output='plot'):
     ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
 
     if output == 'plot':
-        plotSpeciesResults(species, ebitparams)
+        plotSpeciesResults(species, ebitparams, 'mine.png')
     return
-
 
 def main():
 
@@ -86,7 +153,7 @@ def main():
     if args.protons != 0:
         buildAndRunClassesFromArgs(args)
     else:
-        print("we'll use a config instead...")
+        processConfigFile(args.configFile)
 
 if __name__ == "__main__":
     main()
