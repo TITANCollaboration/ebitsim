@@ -46,19 +46,26 @@ def plotSpeciesResults(species, ebitparams, outputConfig):
     import matplotlib
     matplotlib.use("TKAgg")  # This is done as otherwise it goes wierd with a MacOS
     import matplotlib.pyplot as plt
-
+    from cycler import cycler
+    # Should figure out how to put tick marks on the top and right side of graphs, they're useful!
     plt.rcParams['legend.loc'] = 'best'
-    plt.ylabel('Population (%)')
-    plt.xlabel('Breeding time (s)')
-    plt.title("I_e = %.2fA, V_e = %ieV, r_e = %.2Ecm, P_H = %.2ET" % (ebitparams.beamCurrent, ebitparams.beamEnergy, ebitparams.beamRadius, ebitparams.pressure))
+    plt.figure()
 
     for myspecies in species:
         for chargeStateResults in range(0, len(myspecies.results)):
             mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults]) + '+'
+            default_cycler = (cycler(color=['k', 'g', 'b', 'y', 'c', 'm', 'k']) + cycler(linestyle=['-', '--', ':', '-.', '--', '-', ':']))
+            plt.rc('lines', linewidth=2)
+            plt.rc('grid', color='k', linestyle=':', linewidth=0.5)
+            plt.rc('axes', grid=True, prop_cycle=default_cycler)
             plt.plot(column(myspecies.results[chargeStateResults], 0), column(myspecies.results[chargeStateResults], 1), label=mylabel)
-    plt.legend(framealpha=0.5)
 
+    plt.ylabel('Population (%)')
+    plt.xlabel('Breeding time (s)')
+    plt.title("$I_e$ = %.2fA, $V_e$ = %ieV, $r_e$ = %.2Ecm, $P_H$ = %.2ET" % (ebitparams.beamCurrent, ebitparams.beamEnergy, ebitparams.beamRadius, ebitparams.pressure))
+    plt.legend(framealpha=0.5)
     plt.savefig(outputConfig.outputFileName, dpi=300)
+
     return
 
 
@@ -143,7 +150,6 @@ def processCommandLine(args):
     outputConfig.outputType = args.outputType
     outputConfig.outputFileName = args.outputFileName
 
-    # rewrite a bunch of this....
     species.append(ebitChargeDistribution.Species(args.protons, args.nucleons, 0.0, 0.0, 1.0, args.chargeStates))
     ebitparams = ebitChargeDistribution.EbitParams(breedingTime=args.breedingTime, beamEnergy=args.beamEnergy, pressure=args.pressure, beamCurrent=args.beamCurrent, beamRadius=args.beamRadius, probeEvery=args.probeEvery)
 
@@ -156,29 +162,31 @@ def main():
 
     parser = argparse.ArgumentParser(description='EBIT Charge Breeding Simulation')
 
-    parser.add_argument('--config_file', dest='configFile', required=False,
+    parser.add_argument('--configFile', dest='configFile', required=False,
                         help="Specify the complete path to the config file, by default we'll use ebitsim.cfg")
-    parser.add_argument('--output_type', dest='outputType', default='matplotlib', required=False,
+    parser.add_argument('--outputType', dest='outputType', default='matplotlib', required=False,
                         help="Specify how to output the data, defaults to a matplotlib graph, csv will be available at some point")
-    parser.add_argument('--output_file', dest='outputFileName', default='output.png', required=False,
+    parser.add_argument('--outputFileName', dest='outputFileName', default='output.png', required=False,
                         help="Specify filename for csv or png file, please include .csv or .png extension")
     parser.add_argument('-z', dest='protons', type=int, default=0, required=False,
                         help="Specify the num of protons")
+    parser.add_argument('-Z', dest='protons', type=int, default=0, required=False,  # there's probably a better way to handle this... sorry
+                        help="Specify the num of protons")
     parser.add_argument('-a', dest='nucleons', type=int, required=False,
                         help="Specify the num of nucleons")
-    parser.add_argument('--charge_states', nargs='+', dest='chargeStates', type=int, required=False,
+    parser.add_argument('--chargeStates', nargs='+', dest='chargeStates', type=int, required=False,
                         help="Specify charge states such as : --charge-states 32 33 34 35")
-    parser.add_argument('--breeding_time', dest='breedingTime', default=11.0, required=False,
+    parser.add_argument('--breedingTime', dest='breedingTime', default=11.0, type=float, required=False,
                         help="Specify breeding time (sec)")
-    parser.add_argument('--probe_every', dest='probeEvery', default=0.1, type=float, required=False,
+    parser.add_argument('--probeEvery', dest='probeEvery', default=0.001, type=float, required=False, # You can probably crank this up if you want to or need to
                         help="Get results in this incriment (sec)")
-    parser.add_argument('--beam_energy', dest='beamEnergy', default=7000, required=False,
+    parser.add_argument('--beamEnergy', dest='beamEnergy', default=7000, type=float, required=False,
                         help="Beam energy (eV)")
-    parser.add_argument('--beam_current', dest='beamCurrent', default=0.02, required=False,
+    parser.add_argument('--beamCurrent', dest='beamCurrent', default=0.02, type=float, required=False,
                         help="Beam current (Amps)")
-    parser.add_argument('--beam_radius', dest='beamRadius', default=90e-4, required=False,
+    parser.add_argument('--beamRadius', dest='beamRadius', default=90e-4, type=float, required=False,
                         help="Beam radius (cm)")
-    parser.add_argument('--pressure', dest='pressure', default=1e-10, required=False,
+    parser.add_argument('--pressure', dest='pressure', default=1e-10, type=float, required=False,
                         help="ebit vacuum pressure (Torr / cm^3 I think)")
     parser.set_defaults(configFile="ebitsim.cfg")
 
