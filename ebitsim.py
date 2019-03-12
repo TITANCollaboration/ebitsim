@@ -69,6 +69,22 @@ def plotSpeciesResults(species, ebitparams, outputConfig):
     return
 
 
+def writeCSVFile(species, ebitparams, outputConfig):
+    import csv
+    newentry = []
+
+    with open(outputConfig.outputFileName, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',', quoting=csv.QUOTE_NONE)
+
+        for myspecies in species:
+            for chargeStateResults in range(0, len(myspecies.results)):
+                mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults])
+                for myrow in range(len(myspecies.results[chargeStateResults])):
+                    newentry = mylabel, myspecies.results[chargeStateResults][myrow][0], myspecies.results[chargeStateResults][myrow][1]
+                    csvwriter.writerow(newentry)
+    return
+
+
 def runSimulation(species, ebitparams, probeFnAddPop, outputConfig):
     #  Runs the actual simulation via ebitChargeDistribution.calcChargePopulations and then determines how to handle the output
     print("Running simulation! ....")
@@ -77,6 +93,9 @@ def runSimulation(species, ebitparams, probeFnAddPop, outputConfig):
     if outputConfig.outputType == 'matplotlib':
         print("Writing graph to : %s" % outputConfig.outputFileName)
         plotSpeciesResults(species, ebitparams, outputConfig)
+    if outputConfig.outputType == 'csv':
+        print("Writing csv to : %s" % outputConfig.outputFileName)
+        writeCSVFile(species, ebitparams, outputConfig)
     return
 
 

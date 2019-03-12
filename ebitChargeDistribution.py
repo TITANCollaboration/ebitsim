@@ -18,6 +18,7 @@ __MAXCHARGE__ = 105
 __MAXSPECIES__ = 1000
 INITILIZEDEVERYTHING = 0
 
+
 class Species:
     def __init__(self,
                  Z,
@@ -133,16 +134,17 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     return interactionRate
 
 
-def createDefaultInteractionRates(myspecies, ebitparams, probeFnAddPop, runChargeExchange=0):  # move away from chex=0 and move into object
+def createDefaultInteractionRates(myspecies, ebitparams, crossSecFunc, runChargeExchange=0):  # move away from chex=0 and move into object
 
     interactionRates = createEmptyList(myspecies.Z + 2)
     if runChargeExchange == 0:
-        myFuncValues = createInteractionRates(myspecies.Z, ebitparams.beamEnergy, ebitparams.currentDensity, probeFnAddPop(ebitparams.beamEnergy, myspecies.Z))
+        myFuncValues = createInteractionRates(myspecies.Z, ebitparams.beamEnergy, ebitparams.currentDensity, crossSecFunc(ebitparams.beamEnergy, myspecies.Z))
     else:
-        myFuncValues = probeFnAddPop(myspecies.Z, myspecies.A, ebitparams.pressure, ebitparams.ionTemperature)
+        myFuncValues = crossSecFunc(myspecies.Z, myspecies.A, ebitparams.pressure, ebitparams.ionTemperature)
 
     for r in range(0, len(myFuncValues)):
         interactionRates[r] = myFuncValues[r]
+
     return interactionRates
 
 
@@ -166,8 +168,8 @@ def calculateK(ebitparams, myspecies, species, tmpPop, Z, ionizationRates, charg
     for zindex in range(0, Z):
         tmpPop[zindex] = p1[zindex] + (p2[zindex] * addWFactor)
 
-    for zindex in range(0, Z):  # at some point eval if you need both these loops...
-        # Used to use chargeChanges but it was a little faster having this inline
+    for zindex in range(0, Z):
+        # Calculate chargeChanges
         nonDecayDelta = tstep * ((-1 * ionizationRates[zindex] * tmpPop[zindex])
                                  + ((chargeExchangeRates[zindex + 1] + rrRates[zindex + 1]) * tmpPop[zindex + 1]))
 
@@ -206,7 +208,8 @@ def probeFnAddPop(time, ebitparams, myspecies):
 
 def adaptiveRkStepper(species, ebitparams, probeFnAddPop):
     for myspecies in species:
-        time = 0.0
+        time = 0.0  #  We are going to need to adjust the time to pick up where it left off instead of going back here? Or do the loop here?
+        # or or or ????
         nextPrint = 0.0
         noTooBigSteps = 0
         step = ebitparams.rkParams.tStep
@@ -265,9 +268,12 @@ def initEverything(species, ebitparams):
             ebitparams.ignoreBetaDecay = 0
 
         ebitparams.decayConstants.append(myspecies.decayConstant)
+
+        # the following 3 should be rerun between beam changes..
         myspecies.ionizationRates = createDefaultInteractionRates(myspecies, ebitparams, createIonizationCrossSections)
         myspecies.rrRates = createDefaultInteractionRates(myspecies, ebitparams, createRRCrossSections)
         myspecies.chargeExchangeRates = createDefaultInteractionRates(myspecies, ebitparams, createChargeExchangeRates, 1)
+
         myspecies.k1 = createEmptyList(species[0].Z + 2)
         myspecies.k2 = createEmptyList(species[0].Z + 2)
         myspecies.k3 = createEmptyList(species[0].Z + 2)

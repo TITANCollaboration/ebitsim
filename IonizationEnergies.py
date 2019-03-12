@@ -3,7 +3,6 @@
 import csv
 from math import *
 
-# work in progress...
 # this contains a bunch of misc functions used for calculating ionization breeding
 # in the ebit.
 # This is also directly translated from the somewhat original Lisp code.
