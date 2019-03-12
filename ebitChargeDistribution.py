@@ -135,13 +135,13 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     return interactionRate
 
 
-def createDefaultInteractionRates(mySpecies, ebitParams, crossSecFunc, runChargeExchange=0):  # move away from chex=0 and move into object
+def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecFunc, runChargeExchange=0):  # move away from chex=0 and move into object
 
     interactionRates = createEmptyList(mySpecies.Z + 2)
     if runChargeExchange == 0:
-        myFuncValues = createInteractionRates(mySpecies.Z, ebitParams.beamEnergy, ebitParams.currentDensity, crossSecFunc(ebitParams.beamEnergy, mySpecies.Z))
+        myFuncValues = createInteractionRates(mySpecies.Z, myEbitParams.beamEnergy, myEbitParams.currentDensity, crossSecFunc(myEbitParams.beamEnergy, mySpecies.Z))
     else:
-        myFuncValues = crossSecFunc(mySpecies.Z, mySpecies.A, ebitParams.pressure, ebitParams.ionTemperature)
+        myFuncValues = crossSecFunc(mySpecies.Z, mySpecies.A, ebitParams[0].pressure, ebitParams[0].ionTemperature)
 
     for r in range(0, len(myFuncValues)):
         interactionRates[r] = myFuncValues[r]
@@ -222,7 +222,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
         for myEbitParams in ebitParams:
             print("Simulating using beam energy %s" % myEbitParams.beamEnergy)
             timeToBreed = timeToBreed + myEbitParams.breedingTime
-            calcRateMatrices(mySpecies, myEbitParams)
+            calcRateMatrices(mySpecies, myEbitParams, ebitParams)
 
             print("Simulating Species : %s" % mySpecies.Z)
      #       sys.exit(0)
@@ -254,11 +254,11 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
     return
 
 
-def calcRateMatrices(mySpecies, myEbitParams):
-        myEbitParams.currentDensity = (myEbitParams.ionEbeamOverlap * myEbitParams.beamCurrent) / (pi * (myEbitParams.beamRadius ** 2))
-        mySpecies.ionizationRates = createDefaultInteractionRates(mySpecies, myEbitParams, createIonizationCrossSections)
-        mySpecies.rrRates = createDefaultInteractionRates(mySpecies, myEbitParams, createRRCrossSections)
-        mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, createChargeExchangeRates, 1)
+def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
+        myEbitParams.currentDensity = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
+        mySpecies.ionizationRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections)
+        mySpecies.rrRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createRRCrossSections)
+        mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createChargeExchangeRates, 1)
 
 
 def initEverything(species, ebitParams):

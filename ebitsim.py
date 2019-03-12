@@ -19,10 +19,11 @@ import os
 
 # I suspect this class will grow with some additional options as they become needed
 class OutputFormating:
-    def __init__(self, outputFileName='output.png', outputType='matplotlib'):
+    def __init__(self, outputFileName='output.png', outputType='matplotlib', xmin=0, xmax=0):
         self.outputFileName = outputFileName
         self.outputType = outputType
-
+        self.xmin = xmin
+        self.xmax = xmax
 
 def column(matrix, index):
     # Simple function to be able to pull out a single column of data from a list of lists, this lets us plot easily
@@ -54,11 +55,14 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     for myspecies in species:
         for chargeStateResults in range(0, len(myspecies.results)):
             mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults]) + '+'
-            default_cycler = (cycler(color=['k', 'g', 'b', 'y', 'c', 'm', 'k']) + cycler(linestyle=['-', '--', ':', '-.', '--', '-', ':']))
+            default_cycler = (cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'k']) + cycler(linestyle=['--', '-', ':', '-.', '--', '-', ':']))
             plt.rc('lines', linewidth=2)
             plt.rc('grid', color='k', linestyle=':', linewidth=0.5)
             plt.rc('axes', grid=True, prop_cycle=default_cycler)
             plt.plot(column(myspecies.results[chargeStateResults], 0), column(myspecies.results[chargeStateResults], 1), label=mylabel)
+
+            if outputConfig.xmin or outputConfig.xmax != 0:
+                plt.xlim(outputConfig.xmin, outputConfig.xmax)
 
     plt.ylabel('Population (%)')
     plt.xlabel('Breeding time (s)')
@@ -135,18 +139,22 @@ def processConfigFile(configFileName):
         outputConfig.outputType = getConfigEntry(config, 'Output', 'outputType', reqd=True, remove_spaces=True)
         outputConfig.outputFileName = getConfigEntry(config, 'Output', 'outputFileName', reqd=True, remove_spaces=True)
 
+        outputConfig.xmin = float(getConfigEntry(config, 'matPlotLib', 'graphXMinTime', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.xmax = float(getConfigEntry(config, 'matPlotLib', 'graphXMaxTime', reqd=False, remove_spaces=True, default_val=0))
+
+
         ebitParamsList = tuple(getConfigEntry(config, 'Run', 'beamList', reqd=True, remove_spaces=True).split(","))
         ebitParams = []
         for myebitParams in ebitParamsList:
             # Read in Beam information
             beamEnergy = float(getConfigEntry(config, myebitParams, 'beamEnergy', reqd=True, remove_spaces=True))
             breedingTime = float(getConfigEntry(config, myebitParams, 'breedingTime', reqd=True, remove_spaces=True))
-            probeEvery = float(getConfigEntry(config, myebitParams, 'probeEvery', reqd=True, remove_spaces=True))
-            ionEbeamOverlap = float(getConfigEntry(config, myebitParams, 'ionEbeamOverlap', reqd=True, remove_spaces=True))
-            beamCurrent = float(getConfigEntry(config, myebitParams, 'beamCurrent', reqd=True, remove_spaces=True))
-            beamRadius = float(getConfigEntry(config, myebitParams, 'beamRadius', reqd=True, remove_spaces=True))
-            pressure = float(getConfigEntry(config, myebitParams, 'pressure', reqd=True, remove_spaces=True))
-            ionTemperature = float(getConfigEntry(config, myebitParams, 'ionTemperature', reqd=True, remove_spaces=True))
+            probeEvery = float(getConfigEntry(config, myebitParams, 'probeEvery', reqd=False, remove_spaces=True, default_val=0.0))
+            ionEbeamOverlap = float(getConfigEntry(config, myebitParams, 'ionEbeamOverlap', reqd=False, remove_spaces=True, default_val=0.0))
+            beamCurrent = float(getConfigEntry(config, myebitParams, 'beamCurrent', reqd=False, remove_spaces=True, default_val=0.0))
+            beamRadius = float(getConfigEntry(config, myebitParams, 'beamRadius', reqd=False, remove_spaces=True, default_val=0.0))
+            pressure = float(getConfigEntry(config, myebitParams, 'pressure', reqd=False, remove_spaces=True, default_val=0.0))
+            ionTemperature = float(getConfigEntry(config, myebitParams, 'ionTemperature', reqd=False, remove_spaces=True, default_val=0.0))
             ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature))
 
         speciesList = tuple(getConfigEntry(config, 'Run', 'speciesList', reqd=True, remove_spaces=True).split(","))
