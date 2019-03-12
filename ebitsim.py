@@ -40,7 +40,7 @@ def getElementAbv(z):
     return abv
 
 
-def plotSpeciesResults(species, ebitparams, outputConfig):
+def plotSpeciesResults(species, ebitParams, outputConfig):
     #  Plot all species and charge state populations vs. time via matplotlib
 
     import matplotlib
@@ -62,14 +62,14 @@ def plotSpeciesResults(species, ebitparams, outputConfig):
 
     plt.ylabel('Population (%)')
     plt.xlabel('Breeding time (s)')
-    plt.title("$I_e$ = %.2fA, $V_e$ = %ieV, $r_e$ = %.2Ecm, $P_H$ = %.2ET" % (ebitparams.beamCurrent, ebitparams.beamEnergy, ebitparams.beamRadius, ebitparams.pressure))
+    plt.title("$I_e$ = %.2fA, $V_e$ = %ieV, $r_e$ = %.2Ecm, $P_H$ = %.2ET" % (ebitParams.beamCurrent, ebitParams.beamEnergy, ebitParams.beamRadius, ebitParams.pressure))
     plt.legend(framealpha=0.5)
     plt.savefig(outputConfig.outputFileName, dpi=300)
 
     return
 
 
-def writeCSVFile(species, ebitparams, outputConfig):
+def writeCSVFile(species, ebitParams, outputConfig):
     import csv
     newentry = []
 
@@ -85,17 +85,17 @@ def writeCSVFile(species, ebitparams, outputConfig):
     return
 
 
-def runSimulation(species, ebitparams, probeFnAddPop, outputConfig):
+def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
     #  Runs the actual simulation via ebitChargeDistribution.calcChargePopulations and then determines how to handle the output
     print("Running simulation! ....")
-    ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
+    ebitChargeDistribution.calcChargePopulations(species, ebitParams, probeFnAddPop)
 
     if outputConfig.outputType == 'matplotlib':
         print("Writing graph to : %s" % outputConfig.outputFileName)
-        plotSpeciesResults(species, ebitparams, outputConfig)
+        plotSpeciesResults(species, ebitParams[0], outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
     if outputConfig.outputType == 'csv':
         print("Writing csv to : %s" % outputConfig.outputFileName)
-        writeCSVFile(species, ebitparams, outputConfig)
+        writeCSVFile(species, ebitParams[0], outputConfig)
     return
 
 
@@ -119,34 +119,35 @@ def processConfigFile(configFileName):
     # We will read the entire config file here and push it into a different classes and then call runSimulation()
     #
     config = configparser.RawConfigParser()
-    baseDir = os.path.dirname(os.path.realpath(__file__))[:-3]
+    # baseDir = os.path.dirname(os.path.realpath(__file__))[:-3]
 
     if os.path.exists(configFileName):
         config.read(configFileName)
-        ebitparams = ebitChargeDistribution.EbitParams()
         outputConfig = OutputFormating()
-
-        configSections = config.sections()
 
         # Read output information
         outputConfig.outputType = getConfigEntry(config, 'Output', 'outputType', reqd=True, remove_spaces=True)
         outputConfig.outputFileName = getConfigEntry(config, 'Output', 'outputFileName', reqd=True, remove_spaces=True)
 
-        # Read in Beam information
-        ebitparams.beamEnergy = float(getConfigEntry(config, 'BeamAndTrap', 'beamEnergy', reqd=True, remove_spaces=True))
-        ebitparams.breedingTime = float(getConfigEntry(config, 'BeamAndTrap', 'breedingTime', reqd=True, remove_spaces=True))
-        ebitparams.probeEvery = float(getConfigEntry(config, 'BeamAndTrap', 'probeEvery', reqd=True, remove_spaces=True))
-        ebitparams.ionEbeamOverlap = float(getConfigEntry(config, 'BeamAndTrap', 'ionEbeamOverlap', reqd=True, remove_spaces=True))
-        ebitparams.beamCurrent = float(getConfigEntry(config, 'BeamAndTrap', 'beamCurrent', reqd=True, remove_spaces=True))
-        ebitparams.beamRadius = float(getConfigEntry(config, 'BeamAndTrap', 'beamRadius', reqd=True, remove_spaces=True))
-        ebitparams.pressure = float(getConfigEntry(config, 'BeamAndTrap', 'pressure', reqd=True, remove_spaces=True))
-        ebitparams.ionTemperature = float(getConfigEntry(config, 'BeamAndTrap', 'ionTemperature', reqd=True, remove_spaces=True))
+        ebitParamsList = tuple(getConfigEntry(config, 'Run', 'beamList', reqd=True, remove_spaces=True).split(","))
+        ebitParams = []
+        for myebitParams in ebitParamsList:
+            # Read in Beam information
+            beamEnergy = float(getConfigEntry(config, myebitParams, 'beamEnergy', reqd=True, remove_spaces=True))
+            breedingTime = float(getConfigEntry(config, myebitParams, 'breedingTime', reqd=True, remove_spaces=True))
+            probeEvery = float(getConfigEntry(config, myebitParams, 'probeEvery', reqd=True, remove_spaces=True))
+            ionEbeamOverlap = float(getConfigEntry(config, myebitParams, 'ionEbeamOverlap', reqd=True, remove_spaces=True))
+            beamCurrent = float(getConfigEntry(config, myebitParams, 'beamCurrent', reqd=True, remove_spaces=True))
+            beamRadius = float(getConfigEntry(config, myebitParams, 'beamRadius', reqd=True, remove_spaces=True))
+            pressure = float(getConfigEntry(config, myebitParams, 'pressure', reqd=True, remove_spaces=True))
+            ionTemperature = float(getConfigEntry(config, myebitParams, 'ionTemperature', reqd=True, remove_spaces=True))
+            ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature))
 
-        # Read in Run section
         speciesList = tuple(getConfigEntry(config, 'Run', 'speciesList', reqd=True, remove_spaces=True).split(","))
         species = []
 
-        for myspecies in speciesList:      # Collect all the species and parameters for each
+        for myspecies in speciesList:
+            # Collect all the species and parameters for each
             protons = int(getConfigEntry(config, myspecies, 'z', reqd=True, remove_spaces=True))
             nucleons = int(getConfigEntry(config, myspecies, 'nucleons', reqd=True, remove_spaces=True))
             population = float(getConfigEntry(config, myspecies, 'populationPercent', reqd=True, remove_spaces=True))
@@ -156,9 +157,7 @@ def processConfigFile(configFileName):
         print("Config file does not appear to exist : %s" % configFileName)
         sys.exit(1)
 
-#    ebitChargeDistribution.calcChargePopulations(species, ebitparams, probeFnAddPop)
-#    plotSpeciesResults(species, ebitparams, outputFileName)
-    runSimulation(species, ebitparams, probeFnAddPop, outputConfig)
+    runSimulation(species, ebitParams, probeFnAddPop, outputConfig)
     return 0
 
 
@@ -166,13 +165,15 @@ def processCommandLine(args):
     #  Process command line arguments and then call runSimulation()
     outputConfig = OutputFormating()
     species = []
+    ebitParams = []
+
     outputConfig.outputType = args.outputType
     outputConfig.outputFileName = args.outputFileName
 
     species.append(ebitChargeDistribution.Species(args.protons, args.nucleons, 0.0, 0.0, 1.0, args.chargeStates))
-    ebitparams = ebitChargeDistribution.EbitParams(breedingTime=args.breedingTime, beamEnergy=args.beamEnergy, pressure=args.pressure, beamCurrent=args.beamCurrent, beamRadius=args.beamRadius, probeEvery=args.probeEvery)
+    ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime=args.breedingTime, beamEnergy=args.beamEnergy, pressure=args.pressure, beamCurrent=args.beamCurrent, beamRadius=args.beamRadius, probeEvery=args.probeEvery))
 
-    runSimulation(species, ebitparams, probeFnAddPop, outputConfig)
+    runSimulation(species, ebitParams, probeFnAddPop, outputConfig)
 
     return
 
