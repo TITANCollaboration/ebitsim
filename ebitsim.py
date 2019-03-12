@@ -65,9 +65,10 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     beamEnergies = ''
 
     for ebitIndex in range(0, len(ebitParams)):
-        beamEnergies = beamEnergies + str(ebitParams[ebitIndex].beamEnergy)
-        if ebitIndex != 1:
+        if ebitIndex != 0:
             beamEnergies = beamEnergies + '->'
+        beamEnergies = beamEnergies + str(ebitParams[ebitIndex].beamEnergy)
+
     plt.title("$I_e$ = %.2fA, $V_e$ = (%s)eV, $r_e$ = %.2Ecm, $P_H$ = %.2ET" % (ebitParams[0].beamCurrent, beamEnergies, ebitParams[0].beamRadius, ebitParams[0].pressure))
     plt.legend(framealpha=0.5)
     plt.savefig(outputConfig.outputFileName, dpi=300)
