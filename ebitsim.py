@@ -62,7 +62,13 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
 
     plt.ylabel('Population (%)')
     plt.xlabel('Breeding time (s)')
-    plt.title("$I_e$ = %.2fA, $V_e$ = %ieV, $r_e$ = %.2Ecm, $P_H$ = %.2ET" % (ebitParams.beamCurrent, ebitParams.beamEnergy, ebitParams.beamRadius, ebitParams.pressure))
+    beamEnergies = ''
+
+    for ebitIndex in range(0, len(ebitParams)):
+        beamEnergies = beamEnergies + str(ebitParams[ebitIndex].beamEnergy)
+        if ebitIndex != 1:
+            beamEnergies = beamEnergies + '->'
+    plt.title("$I_e$ = %.2fA, $V_e$ = (%s)eV, $r_e$ = %.2Ecm, $P_H$ = %.2ET" % (ebitParams[0].beamCurrent, beamEnergies, ebitParams[0].beamRadius, ebitParams[0].pressure))
     plt.legend(framealpha=0.5)
     plt.savefig(outputConfig.outputFileName, dpi=300)
 
@@ -70,7 +76,6 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
 
 
 def writeCSVFile(species, ebitParams, outputConfig):
-    import csv
     newentry = []
 
     with open(outputConfig.outputFileName, 'w', newline='') as csvfile:
@@ -92,7 +97,7 @@ def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
 
     if outputConfig.outputType == 'matplotlib':
         print("Writing graph to : %s" % outputConfig.outputFileName)
-        plotSpeciesResults(species, ebitParams[0], outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
+        plotSpeciesResults(species, ebitParams, outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
     if outputConfig.outputType == 'csv':
         print("Writing csv to : %s" % outputConfig.outputFileName)
         writeCSVFile(species, ebitParams[0], outputConfig)
