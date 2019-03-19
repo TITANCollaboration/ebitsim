@@ -1,15 +1,13 @@
 # ebitsim
 EBIT simulator for ion breeding
 
-
-REQUIRES PYTHON3
+**REQUIRES Python3
 
 I also highly recommend the use of PyPy3 with this.
 
 -------------
 
-
-Example usage :
+#Example usage :
 
 Using command line arguments:
 
@@ -21,8 +19,7 @@ pypy3 ebitsim.py --configFile ebitsim.cfg
 
 -------------
 
-
-PyPy3 setup for using matplotlib:
+#PyPy3 setup for using matplotlib:
 
 pypy3 -m ensurepip
 
