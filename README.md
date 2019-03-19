@@ -6,6 +6,8 @@ REQUIRES PYTHON3
 
 I also highly recommend the use of PyPy3 with this.
 
+-------------
+
 Example usage :
 
 Using command line arguments:
@@ -16,9 +18,15 @@ Using config file:
 
 pypy3 ebitsim.py --configFile ebitsim.cfg
 
-Grabbed periodic table of elements csv from : https://gist.github.com/GoodmanSciences/c2dd862cd38f21b0ad36b8f96b4bf1ee  Thank you!
-
+-------------
 PyPy3 setup:
 
 pypy3 -m ensurepip
 pypy3 -m pip install matplotlib
+-------------
+
+
+
+
+
+Grabbed periodic table of elements csv from : https://gist.github.com/GoodmanSciences/c2dd862cd38f21b0ad36b8f96b4bf1ee  -  Thank you!
