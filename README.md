@@ -8,6 +8,7 @@ I also highly recommend the use of PyPy3 with this.
 
 -------------
 
+
 Example usage :
 
 Using command line arguments:
@@ -19,6 +20,7 @@ Using config file:
 pypy3 ebitsim.py --configFile ebitsim.cfg
 
 -------------
+
 
 PyPy3 setup for using matplotlib:
 
