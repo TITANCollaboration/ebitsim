@@ -19,11 +19,13 @@ Using config file:
 pypy3 ebitsim.py --configFile ebitsim.cfg
 
 -------------
+
 PyPy3 setup for using matplotlib:
 
 pypy3 -m ensurepip
 
 pypy3 -m pip install matplotlib
+
 -------------
 
 
