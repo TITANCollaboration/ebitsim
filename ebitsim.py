@@ -68,7 +68,7 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
             if outputConfig.ymin or outputConfig.ymax != 0:
                 plt.ylim(outputConfig.ymin, outputConfig.ymax)
 
-    plt.ylabel('Population (%)')
+    plt.ylabel('Population')
     plt.xlabel('Breeding time (s)')
     beamEnergies = ''
 

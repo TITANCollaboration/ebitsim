@@ -211,8 +211,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
 
     for mySpecies in species:
 
-        time = 0.0  #  We are going to need to adjust the time to pick up where it left off instead of going back here? Or do the loop here?
-        # or or or ????
+        time = 0.0
         nextPrint = 0.0
         noTooBigSteps = 0
         step = ebitParams[0].rkParams.tStep
@@ -225,7 +224,6 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
             calcRateMatrices(mySpecies, myEbitParams, ebitParams)
 
             print("Simulating Species : %s" % mySpecies.Z)
-     #       sys.exit(0)
             while time <= timeToBreed:
                 if time >= nextPrint:
                     nextPrint = nextPrint + ebitParams[0].probeEvery
