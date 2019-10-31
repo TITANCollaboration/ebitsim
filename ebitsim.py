@@ -19,13 +19,14 @@ import os
 
 # I suspect this class will grow with some additional options as they become needed
 class OutputFormating:
-    def __init__(self, outputFileName='output.png', outputType='matplotlib', xmin=0, xmax=0, ymin=0, ymax=0):
+    def __init__(self, outputFileName='output.png', outputType='matplotlib', xmin=0, xmax=0, ymin=0, ymax=0, logx=0):
         self.outputFileName = outputFileName
         self.outputType = outputType
         self.xmin = xmin
         self.xmax = xmax
         self.ymin = ymin
         self.ymax = ymax
+        self.logx = logx
 
 def column(matrix, index):
     # Simple function to be able to pull out a single column of data from a list of lists, this lets us plot easily
@@ -67,6 +68,8 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
                 plt.xlim(outputConfig.xmin, outputConfig.xmax)
             if outputConfig.ymin or outputConfig.ymax != 0:
                 plt.ylim(outputConfig.ymin, outputConfig.ymax)
+            if outputConfig.logx == 1:
+                plt.xscale('log')
 
     plt.ylabel('Population')
     plt.xlabel('Breeding time (s)')
@@ -147,6 +150,7 @@ def processConfigFile(configFileName):
         outputConfig.xmax = float(getConfigEntry(config, 'matPlotLib', 'graphXMaxTime', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.ymin = float(getConfigEntry(config, 'matPlotLib', 'graphYMinPop', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.ymax = float(getConfigEntry(config, 'matPlotLib', 'graphYMaxPop', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.logx = float(getConfigEntry(config, 'matPlotLib', 'graphXScale', reqd=False, remove_spaces=True, default_val=0))
 
 
         ebitParamsList = tuple(getConfigEntry(config, 'Run', 'beamList', reqd=True, remove_spaces=True).split(","))
