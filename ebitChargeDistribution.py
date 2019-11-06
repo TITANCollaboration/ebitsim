@@ -191,7 +191,7 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
     mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0, mySpecies.k2, 0.5, tstep)
     mySpecies.k4 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, populationAtT0, mySpecies.k3, 1.0, tstep)
 
-    for zindex in range(0, mySpecies.Z):
+    for zindex in range(0, mySpecies.Z + 1):
         populationAtTtstep[zindex] = populationAtT0[zindex] + ((1 / 6) * (mySpecies.k1[zindex] + (2 * (mySpecies.k2[zindex] + mySpecies.k3[zindex])) + mySpecies.k4[zindex]))
     return
 
