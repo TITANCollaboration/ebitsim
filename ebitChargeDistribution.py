@@ -6,14 +6,20 @@ import copy
 import sys
 
 __EMASS__ = 5.11e5  # "Electron mass in eV"
-__C__ = 3.0e10  # "Speed of light"
+__C__ = 3.0e10  # "Speed of light in cm/s"
 __ECHG__ = 1.6e-19  # "Electron charge"
-__VBOHR__ = 2.2e8
+__VBOHR__ = 2.2e8  # "Bohr velocity in cm/s"
 __AMU__ = 9.311e8  # "1 AMU in eV"
 __TORR__ = 3.537e16  # "1 torr in cm-3"
 __ALPHA__ = 7.2974e-3  # "fine-structure constant"
 __CHEXCONST__ = 2.25e-16  # "Constant for use in charge-exchange "
 __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
+__kB__ = 1.381e-23  # "Boltzmann constant"
+
+
+__SALZBORNAK__ = 1.43E-12 # "Constants from Mueller & Salzborn, Sept 1977"
+__SALZBORNALPHAK__ = 1.17
+__SALZBORNBETAK__ = 2.76
 
 __MAXCHARGE__ = 105
 __MAXSPECIES__ = 1000
@@ -104,6 +110,8 @@ def createDecayConstants(betaHalfLife):
 
 
 def createChargeExchangeRates(Z, A, pressure, ionTemperature):
+    # We are not sure of where this formula for CX cross sections is derived from
+    # possibly might change to formulation of Salzborn & Mueller 1977 work.
     chargeExchangeRates = [0] * (Z + 1)
 
     # Need to return a Z+1 array
@@ -163,23 +171,35 @@ def betaDecay(mySpecies, species, ebitParams, zindex, tstep):
 
 
 def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates,  retK, p1, p2, addWFactor, tstep):
+    # K's are the increments used in the Runge Kutta 4 iterative method
     betaDecayDelta = 0
     nonDecayLastDelta = 0.0
-
-    for zindex in range(0, Z):
+    
+    # tmpPop is the population at the beginning, midpoint or end of the interval.
+    # this is used to estimate slopes for calculating k1, k2, k3, k4.
+    # indexes through each value of ion charge state: 0 to Z+
+    for zindex in range(0, Z+1):
         tmpPop[zindex] = p1[zindex] + (p2[zindex] * addWFactor)
-
-    for zindex in range(0, Z):
-        # Calculate chargeChanges
-        nonDecayDelta = tstep * ((-1 * ionizationRates[zindex] * tmpPop[zindex])
-                                 + ((chargeExchangeRates[zindex + 1] + rrRates[zindex + 1]) * tmpPop[zindex + 1]))
+    
+    for zindex in range(0, Z+1):
+        # Calculate changes in charge state populations:
+        # dNi = dt * ( Rei(i-1) - Rei(i) + Rrr(i+1) - Rrr(i) + Rcx(i+1) - Rcx(i) )
+        #     where Ni is population of charge state i
+        #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
+        # rates below are already accounting for population and depopulation by neighboring charge state populations
+        nonDecayDelta = tstep * (- (ionizationRates[zindex]         * tmpPop[zindex]     )
+#                                 + (ionizationRates[zindex - 1]     * tmpPop[zindex - 1] )
+#                                 - (chargeExchangeRates[zindex]     * tmpPop[zindex]     )
+#                                 - (rrRates[zindex]                 * tmpPop[zindex]     )
+                                 + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (rrRates[zindex + 1]             * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
             betaDecayDelta = betaDecay(mySpecies, species, ebitParams, zindex, tstep)
 
         retK[zindex] = (nonDecayDelta - nonDecayLastDelta) + betaDecayDelta
         nonDecayLastDelta = nonDecayDelta
-        retK[Z] = (-nonDecayLastDelta) + betaDecayDelta
+        retK[Z+1] = (-nonDecayLastDelta) + betaDecayDelta
 
     return retK
 

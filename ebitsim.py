@@ -100,13 +100,41 @@ def writeCSVFile(species, ebitParams, outputConfig):
                     newentry = mylabel, myspecies.results[chargeStateResults][myrow][0], myspecies.results[chargeStateResults][myrow][1]
                     csvwriter.writerow(newentry)
     return
+    
 
+def writeRates(species, ebitParams, outputConfig):
+    
+    with open(outputConfig.outputFileName,'w',newline='') as ratesfile:
+        csvwriter = csv.writer(ratesfile, delimiter=',', quoting=csv.QUOTE_NONE)
+        
+        # Only showing one of the EBIT parameters, no beam energy scanning!        
+        csvwriter.writerow(['Breeding time: %s' %ebitParams[0].breedingTime])    
+        csvwriter.writerow(['Beam energy: %s' %ebitParams[0].beamEnergy])
+        
+        for myspecies in species:
+            csvwriter.writerow(['Species = %s' % getElementAbv(myspecies.Z)])
+            csvwriter.writerow(['ionization rates for q=0 to %s:' % str(len(myspecies.ionizationRates)-1)])
+            for i,j in enumerate(myspecies.ionizationRates):
+                csvwriter.writerow(['q = %s' %i] + [j])
+            
+            csvwriter.writerow(['radiative recombination rates:'])
+            for i,j in enumerate(myspecies.rrRates):
+                csvwriter.writerow(['q = %s' %i] + [j])
+            
+            csvwriter.writerow(['charge exchange rates:'])
+            for i,j in enumerate(myspecies.chargeExchangeRates):
+                csvwriter.writerow(['q = %s' %i] + [j])
+        
+        csvwriter.writerow(['END'])
 
 def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
     #  Runs the actual simulation via ebitChargeDistribution.calcChargePopulations and then determines how to handle the output
     print("Running simulation! ....")
     ebitChargeDistribution.calcChargePopulations(species, ebitParams, probeFnAddPop)
 
+    if outputConfig.outputType == 'rates':
+        print("Writing rates to csv: %s" % outputConfig.outputFileName)
+        writeRates(species, ebitParams, outputConfig)
     if outputConfig.outputType == 'matplotlib':
         print("Writing graph to : %s" % outputConfig.outputFileName)
         plotSpeciesResults(species, ebitParams, outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
