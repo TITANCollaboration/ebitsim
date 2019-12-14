@@ -4,6 +4,7 @@ from IonizationEnergies import *
 from rr import *
 import copy
 import sys
+import time
 
 __EMASS__ = 5.11e5  # "Electron mass in eV"
 __C__ = 3.0e10  # "Speed of light in cm/s"
@@ -17,6 +18,8 @@ __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
 __kB__ = 1.381e-23  # "Boltzmann constant"
 
 
+
+# Charge exchange constants
 __SALZBORNAK__ = 1.43E-12 # "Constants from Mueller & Salzborn, Sept 1977"
 __SALZBORNALPHAK__ = 1.17
 __SALZBORNBETAK__ = 2.76
@@ -39,6 +42,12 @@ class Species:
                  ionizationRates=None,
                  rrRates=None,
                  chargeExchangeRates=None,
+                 diff=0.0,
+                 bestStepSize=0.0,
+                 noTooBigSteps=0.0,
+                 betaDecayDelta = 0.0,
+                 truncationError = 0.0,
+                 stepCounter = 0,
                  k1=[],
                  k2=[],
                  k3=[],
@@ -52,9 +61,15 @@ class Species:
         self.A = A
         self.decaysTo = decaysTo
         self.betaHalfLife = betaHalfLife
+        self.betaDecayDelta = betaDecayDelta
+        self.truncationError = truncationError
+        self.stepCounter = stepCounter
         self.initSCIPop = initSCIPop
         self.decayConstant = decayConstant
         self.chargeStates = chargeStates
+        self.diff = diff
+        self.bestStepSize = bestStepSize
+        self.noTooBigSteps = noTooBigSteps
         self.results = results
 
 # I think I need to move chargeStates up to here.. could concievibly do that for a bunch
@@ -157,11 +172,14 @@ def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecF
     return interactionRates
 
 
+
+
 def betaDecay(mySpecies, species, ebitParams, zindex, tstep):
+    # this needs to calculate the overall rate of change from losses and gains from beta decay
     mySpeciesIndex = species.index(mySpecies)
     if zindex >= 1:
         try:
-            myval = ((-1 * ebitParams.decayConstants[mySpeciesIndex] * mySpecies.tmpPop[zindex])
+            myval = (- (ebitParams.decayConstants[mySpeciesIndex] * mySpecies.tmpPop[zindex]                 )
                      + (ebitParams.decayConstants[mySpeciesIndex + 1] * species[mySpeciesIndex + 1].tmpPop[zindex]))
         except IndexError:   # *** PLEASE MAKE SURE THIS IS A DECENT ASSUMPTION OF WHAT I SHOULD DO... TEST ME! ***
             myval = (-1 * ebitParams.decayConstants[mySpeciesIndex] * mySpecies.tmpPop[zindex])
@@ -172,34 +190,64 @@ def betaDecay(mySpecies, species, ebitParams, zindex, tstep):
 
 def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates,  retK, p1, p2, addWFactor, tstep):
     # K's are the increments used in the Runge Kutta 4 iterative method
-    betaDecayDelta = 0
-    nonDecayLastDelta = 0.0
+
+    # Lengths here are Z+1 because we have a neutral charge state to account for.
+    mySpecies.betaDecayDelta = [0.0]*(Z+1)
     
+    nonDecayLastDelta = 0.0
+
     # tmpPop is the population at the beginning, midpoint or end of the interval.
     # this is used to estimate slopes for calculating k1, k2, k3, k4.
-    # indexes through each value of ion charge state: 0 to Z+
+    # indexes through each value of ion charge state: 0 to Z
     for zindex in range(0, Z+1):
+        # print("Z is %s" %str(mySpecies.Z))
+        # print("addWFactor is %s" %str(addWFactor))
+        # print("zindex is %s" %str(zindex))
         tmpPop[zindex] = p1[zindex] + (p2[zindex] * addWFactor)
     
-    for zindex in range(0, Z+1):
+    # This only indexes to Z-1 because the Z index is filled separately
+    for zindex in range(0, Z):
         # Calculate changes in charge state populations:
         # dNi = dt * ( Rei(i-1) - Rei(i) + Rrr(i+1) - Rrr(i) + Rcx(i+1) - Rcx(i) )
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
-        # rates below are already accounting for population and depopulation by neighboring charge state populations
-        nonDecayDelta = tstep * (- (ionizationRates[zindex]         * tmpPop[zindex]     )
-#                                 + (ionizationRates[zindex - 1]     * tmpPop[zindex - 1] )
-#                                 - (chargeExchangeRates[zindex]     * tmpPop[zindex]     )
-#                                 - (rrRates[zindex]                 * tmpPop[zindex]     )
+
+        # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
+        # value is retained and used for the next step to account for rates between q-1 and q.
+        nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
+#                                 + (    ionizationRates[zindex - 1] * tmpPop[zindex - 1] )
+#                                 - (    chargeExchangeRates[zindex] * tmpPop[zindex]     )
+#                                 - (                rrRates[zindex] * tmpPop[zindex]     )
                                  + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
-                                 + (rrRates[zindex + 1]             * tmpPop[zindex + 1] ) )
+                                 + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
-            betaDecayDelta = betaDecay(mySpecies, species, ebitParams, zindex, tstep)
+            mySpecies.betaDecayDelta[zindex] = mySpecies.tmpPop[zindex]*mySpecies.decayConstant*tstep
+            # mySpecies.betaDecayDelta[zindex] = betaDecay1(mySpecies, species, ebitParams, zindex, tstep)
 
-        retK[zindex] = (nonDecayDelta - nonDecayLastDelta) + betaDecayDelta
+        retK[zindex] = (nonDecayDelta - nonDecayLastDelta)
         nonDecayLastDelta = nonDecayDelta
-        retK[Z+1] = (-nonDecayLastDelta) + betaDecayDelta
+    
+    # Filling of Z index
+    retK[Z] = (-nonDecayLastDelta)
+    mySpecies.betaDecayDelta[Z] = mySpecies.tmpPop[Z]*mySpecies.decayConstant*tstep
+
+
+    mySpeciesIndex = species.index(mySpecies)
+    if mySpeciesIndex != 0 and mySpecies.Z - species[mySpeciesIndex-1].Z == 1:
+        # first condition: if mySpeciesIndex==0, then nothing is populating our species with beta decay
+        # second condition: if the next lower index of species is one unit of Z away, it populates mySpecies
+
+        # this is confusing. To the original retK, we subtract the beta decay rate of mySpecies and add the beta decay rate
+        # of species[mySpeciesIndex-1]. Since betaDecayDelta of the species at Z-1 is shorter in length by 1 we must add a [0] at beginning
+        retK = [*map(lambda x: x[0]-x[1]+x[2], zip(retK, mySpecies.betaDecayDelta, [0]+species[mySpeciesIndex-1].betaDecayDelta))]
+    else:
+        # else we just do the regular and subtract the beta decay rate.
+        retK = [x[0]-x[1] for x in zip(retK, mySpecies.betaDecayDelta)]
+
+    # This will not work because the next species will not see it. Also, I don't have a conditional in here for checking
+    # that the next species is neighboring in Z. The solution is to make this rate a parameter of the class. The best thing
+    # about such a solution is that we dont need betaDecayLastDelta... just look at the previous species.
 
     return retK
 
@@ -207,13 +255,15 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
 def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTtstep):
     # longer function param calls yes but it speeds it up calculateK by 10%...
     mySpecies.k1 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
-    mySpecies.k2 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, populationAtT0, mySpecies.k1, 0.5, tstep)
-    mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0, mySpecies.k2, 0.5, tstep)
-    mySpecies.k4 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, populationAtT0, mySpecies.k3, 1.0, tstep)
+    mySpecies.k2 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, populationAtT0, mySpecies.k1,     0.5, tstep)
+    mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0, mySpecies.k2,     0.5, tstep)
+    mySpecies.k4 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, populationAtT0, mySpecies.k3,     1.0, tstep)
 
+    # Updates the population of each charge state in a species. From 0 to Z
     for zindex in range(0, mySpecies.Z + 1):
-        populationAtTtstep[zindex] = populationAtT0[zindex] + ((1 / 6) * (mySpecies.k1[zindex] + (2 * (mySpecies.k2[zindex] + mySpecies.k3[zindex])) + mySpecies.k4[zindex]))
+        populationAtTtstep[zindex] = populationAtT0[zindex] + ((1 / 6) * (mySpecies.k1[zindex] + (2 * (mySpecies.k2[zindex] + mySpecies.k3[zindex])) + mySpecies.k4[zindex]) )
     return
+
 
 
 def probeFnAddPop(time, ebitParams, mySpecies):
@@ -223,54 +273,115 @@ def probeFnAddPop(time, ebitParams, mySpecies):
     #  let me know.
     for chargeIndex in range(0, len(mySpecies.chargeStates)):
         if len(mySpecies.results) < len(mySpecies.chargeStates):
-            mySpecies.results.append([])
+            mySpecies.results.append([]) # Pre-allocate the size of .results
         mySpecies.results[chargeIndex].append([time, mySpecies.population[mySpecies.chargeStates[chargeIndex]]])
 
 
+
 def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
+    # This is an attempt at restructuring adaptiveRkStepper() so that it can perform beta decay much easier. -Zach
+    # The essential difference is that I will not be looping through a species, rather performing the time advance
+    # for ALL species in one iteration.
+    # To accommodate for the adaptive stepping, I calculate the bestStepSize of each species and use the limiting 
+    # value for the next iteration. Therefore the rate of change of one population can limit the whole calculation.
+    # It is slightly slower than the original algorithm and it allows for us to better implement interactions 
+    # between the different species in the EBIT.
+    
 
+    t = 0.0
+    bestStepSize = 0 # This is an overall value that is used after the mySpecies.bestStepSize's are compared.
+    nextPrint = 0.0
+    step = ebitParams[0].rkParams.tStep
     for mySpecies in species:
+        # mySpecies.noTooBigSteps is already defaulted to 0.0 upon instantiation
+        mySpecies.bestStepSize = step
+    timeToBreed = 0.0
 
-        time = 0.0
-        nextPrint = 0.0
-        noTooBigSteps = 0
-        step = ebitParams[0].rkParams.tStep
-        bestStepSize = step
-        timeToBreed = 0.0
-        # For loop for beam changes here?
-        for myEbitParams in ebitParams:
-            print("Simulating using beam energy %s" % myEbitParams.beamEnergy)
-            timeToBreed = timeToBreed + myEbitParams.breedingTime
+    for myEbitParams in ebitParams:
+        print("Simulating using beam energy %s" % myEbitParams.beamEnergy)
+        print("Tracking species Z = %s" % ', '.join(map(lambda x: str(x.Z), species) ) )
+        if myEbitParams.ignoreBetaDecay == 0:
+            # the list below is incredibly ugly, but it just gets the Z's of species which have nonzero decay constants.
+            betaDecayList = [species[i].Z for i,j in enumerate(map(lambda x: x.decayConstant, species)) if j!=0.0]
+            print("Detected nonzero beta decay constants for Z = %s" %', '.join(map(str, betaDecayList )) )
+            print("\n***Please note that the inclusion of beta decay physics significantly increases computation time!***")
+
+        timeToBreed = timeToBreed + myEbitParams.breedingTime
+        for mySpecies in species:
             calcRateMatrices(mySpecies, myEbitParams, ebitParams)
 
-            print("Simulating Species : %s" % mySpecies.Z)
-            while time <= timeToBreed:
-                if time >= nextPrint:
-                    nextPrint = nextPrint + ebitParams[0].probeEvery
-                    probeFnAddPop(time, ebitParams[0], mySpecies)
+        # Enter rk stepping loop
+        while t <= timeToBreed:
 
-                rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1)
-                rkStep(ebitParams[0], mySpecies, species, step, mySpecies.population, mySpecies.y12)
-                rkStep(ebitParams[0], mySpecies, species, step, mySpecies.y12, mySpecies.y22)
+            # Compute population change for all species in the EBIT.
+            for mySpecies in species:
+                # See Wikipedia page for "Adaptive stepsize" for an explanation of how this works
+                # The last input parameters y1, y12 and y22 are actually populations which are being calculated. 
+                # y1 is calculated using the derivatives at t0 and evolving forward by 2*tstep
+                # y12 is calculated using the derivatives at t0 and evolving forward by tstep
+                # y22 is calculated using derivatives of y12 at t0 + tstep and evolves forward by tstep, resulting in a total of 2*tstep.
+                # Therfore y22 is a more accurate estimation at t0 + 2*tstep than y1.
+                
+                # start = time.time()
+                rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 )
+                rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12)
+                rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22)
+                # end = time.time()
+                # print("t = %s"%str(t)+", duration of Z=%s "%str(mySpecies.Z)+ ", 3 rkStep calculations: %s" %str(end-start))
 
-                diff = sum([abs(x - y) for (x, y) in zip(mySpecies.y1, mySpecies.y22)])  # This just takes a differences and sums all the diffs
+                # Calculates for EACH species.
+                # y22 is objectively a better estimate than y1.
+                # If the sum of absolute differences between y1 and y22 is nonzero, modify bestStepSize to be smaller
+                # than step. This means that step was too large.
+                mySpecies.diff = sum([abs(x - y) for (x, y) in zip(mySpecies.y1, mySpecies.y22)])
 
-                if diff > 0:
-                    bestStepSize = step * ((ebitParams[0].rkParams.desiredAccuracy / diff) ** 0.2)
-                else:
-                    time = time + step
+                # Keep track of global truncation error
+                mySpecies.truncationError += mySpecies.diff
+            
+            # If ANY of the diff's are >0, then we perform the bestStepSize calculation
+            if any(i>0 for i in map(lambda x: x.diff, species)):
+                # If y22 != y1, we determine the best step size.
+                for mySpecies in species:
+                    if mySpecies.diff != 0:
+                        mySpecies.bestStepSize = step * ((ebitParams[0].rkParams.desiredAccuracy / mySpecies.diff) ** 0.2)
+            else:
+                # If y1 == y22 for all species (unlikely), then we commit the y22 population of every species and continue without adjusting the step size.
+                # But we DO increment the time... but I can't do it here because then time would change between
+                # species.
+                t += 2*step
+                
+                for mySpecies in species:
+                    mySpecies.stepCounter += 1
                     mySpecies.population = copy.copy(mySpecies.y22)
-                    continue  # if we got here then we can skip to the top of the while statement
-                if bestStepSize >= step:
-                    time = time + step
-                    mySpecies.population = copy.copy(mySpecies.y22)
-                else:
-                    noTooBigSteps = noTooBigSteps + 1
+                # Continue means we start again at the beginning of the species loop!
+                continue
 
-                step = 0.9 * bestStepSize
-        # print(mySpecies.results)
+            # If we get here, the first if statement was entered and bestStepSize has been adjusted.
+            # If ALL of the bestStepSizes are greater than step, we commit y22, increment time, and adjust step
+            if all(i >= step for i in map(lambda x: x.bestStepSize, species)):
+                t += 2*step
+                bestStepSize = min(map(lambda x: x.bestStepSize, species))
+                for mySpecies in species:
+                    mySpecies.stepCounter += 1
+                    mySpecies.population = copy.copy(mySpecies.y22)
+            else:
+                # If we get here, one of the mySpecies.bestStepSize values is smaller than step
+                # and we need to re-perform this time loop with an adjusted step value.
+                # We do NOT increment the time
+                bestStepSize = min(map(lambda x: x.bestStepSize, species))
+                mySpecies.noTooBigSteps += 1
+
+            # If we get here, one of the mySpecies.bestStepSize's was either too large or too small. In the statements above, depending on
+            # largeness or smallness, we assigned the correct value to bestStepSize.
+            step = 0.9 * bestStepSize
+
+            # Probing the population of each species AFTER the calculation because y1, y12, and y22 are populations at time = time + 2*step
+            if t >= nextPrint:
+                nextPrint += ebitParams[0].probeEvery
+                for mySpecies in species:
+                    probeFnAddPop(t, ebitParams[0], mySpecies)
+
     return
-
 
 def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
         myEbitParams.currentDensity = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
@@ -288,28 +399,33 @@ def initEverything(species, ebitParams):
     species.sort(key=lambda x: x.Z, reverse=True)  # Sort species list by Z in decending order
     largestZValue = species[0].Z  # We need the largest value for the size of the population array
 
-    if species[0].betaHalfLife != 0.0:  # The largest Z value species is not allowed to have a beta decay
-        raise ValueError("Can not handle having a beta decay for highest Z species")
+    species.reverse() # For beta decay calculations, species must be ascending in Z
+
+    # if species[0].betaHalfLife != 0.0:  # The largest Z value species is not allowed to have a beta decay
+    #     raise ValueError("Can not handle having a beta decay for highest Z species")
 
     for mySpecies in species:
         # Initilize everything ...
         mySpecies.population = createEmptyList(largestZValue + 2)
-        mySpecies.population[1] = mySpecies.initSCIPop
+        mySpecies.population[0] = mySpecies.initSCIPop
         mySpecies.decayConstant = createDecayConstants(mySpecies.betaHalfLife)
 
         if mySpecies.decayConstant > 0:  # If we don't need it we will use this to ignore the beta calculation function
-            ebitParams.ignoreBetaDecay = 0
+            ebitParams[0].ignoreBetaDecay = 0
 
         ebitParams[0].decayConstants.append(mySpecies.decayConstant)
 
-        mySpecies.k1 = createEmptyList(species[0].Z + 2)
-        mySpecies.k2 = createEmptyList(species[0].Z + 2)
-        mySpecies.k3 = createEmptyList(species[0].Z + 2)
-        mySpecies.k4 = createEmptyList(species[0].Z + 2)
-        mySpecies.tmpPop = createEmptyList(species[0].Z + 2)
-        mySpecies.y1 = createEmptyList(species[0].Z + 2)
-        mySpecies.y12 = createEmptyList(species[0].Z + 2)
-        mySpecies.y22 = createEmptyList(species[0].Z + 2)
+        # These arrays are dynamic and only hold instantaneous information for calculations of the population
+        # of each charge state of a species.
+        mySpecies.k1 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.k2 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.k3 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.k4 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.tmpPop = createEmptyList(mySpecies.Z + 2)
+        mySpecies.y1 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.y12 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.y22 = createEmptyList(mySpecies.Z + 2)
+
         mySpecies.results = []
     INITILIZEDEVERYTHING = 1
 
@@ -318,6 +434,18 @@ def calcChargePopulations(species, ebitParams, probeFnAddPop):
     if INITILIZEDEVERYTHING == 0:
         initEverything(species, ebitParams)
 
+    start = time.time()
     adaptiveRkStepper(species, ebitParams, probeFnAddPop)  # this does all the heavy lifting
-
+    end = time.time()
+    for mySpecies in species:
+        print("------------------------------------------------------- \n")
+        print("Species diagnostics for Z = %s:" %str(mySpecies.Z))
+        print("    Checking final EBIT population of species... %s" %str(sum([i[-1][-1] for i in mySpecies.results]) ))
+        print("    Total number of time steps used... %s" %str(mySpecies.stepCounter) )
+        print("    Number of bad step guesses... %s" %str(mySpecies.noTooBigSteps))
+        print("    Global truncation error... %s" %str(mySpecies.truncationError))
+        print("------------------------------------------------------- \n")
+    
+    print("Clock time for adaptive RK4 algorithm: %s seconds" %str(end-start))
+    print("Simulation finished...")
     return

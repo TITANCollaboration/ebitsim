@@ -16,17 +16,31 @@ from ebitChargeDistribution import probeFnAddPop
 import platform
 import sys
 import os
+import time
 
 # I suspect this class will grow with some additional options as they become needed
 class OutputFormating:
-    def __init__(self, outputFileName='output.png', outputType='matplotlib', xmin=0, xmax=0, ymin=0, ymax=0, logx=0):
+    def __init__(self, outputFileName='output.png',
+                       outputType='matplotlib',
+                       logOutput=0,
+                       stepPlot = 0,
+                       badGuessPlot = 0,
+                       xmin=0,
+                       xmax=0,
+                       ymin=0,
+                       ymax=0,
+                       logx=0):
         self.outputFileName = outputFileName
         self.outputType = outputType
+        self.logOutput = logOutput
+        self.stepPlot = stepPlot
+        self.badGuessPlot = badGuessPlot
         self.xmin = xmin
         self.xmax = xmax
         self.ymin = ymin
         self.ymax = ymax
         self.logx = logx
+
 
 def column(matrix, index):
     # Simple function to be able to pull out a single column of data from a list of lists, this lets us plot easily
@@ -87,6 +101,8 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     return
 
 
+
+
 def writeCSVFile(species, ebitParams, outputConfig):
     newentry = []
 
@@ -103,6 +119,7 @@ def writeCSVFile(species, ebitParams, outputConfig):
     
 
 def writeRates(species, ebitParams, outputConfig):
+    # An option to write out the rate matricies for diagnostic purposes.
     
     with open(outputConfig.outputFileName,'w',newline='') as ratesfile:
         csvwriter = csv.writer(ratesfile, delimiter=',', quoting=csv.QUOTE_NONE)
@@ -129,18 +146,35 @@ def writeRates(species, ebitParams, outputConfig):
 
 def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
     #  Runs the actual simulation via ebitChargeDistribution.calcChargePopulations and then determines how to handle the output
+    
+    # Option to write to a log.log file in the same directory as the outputFileName
+    if outputConfig.logOutput in ["True", "T", "Yes", "Y", 1]:
+        print("Writing output to log file...")
+        old_stdout = sys.stdout
+        log_file = open(os.path.dirname(outputConfig.outputFileName)+os.sep+"log.log", "w")
+        sys.stdout = log_file
+        print(time.asctime(time.localtime()))
+
     print("Running simulation! ....")
     ebitChargeDistribution.calcChargePopulations(species, ebitParams, probeFnAddPop)
 
     if outputConfig.outputType == 'rates':
-        print("Writing rates to csv: %s" % outputConfig.outputFileName)
+        print("Writing rates to csv: %s \n" % outputConfig.outputFileName)
         writeRates(species, ebitParams, outputConfig)
     if outputConfig.outputType == 'matplotlib':
-        print("Writing graph to : %s" % outputConfig.outputFileName)
+        print("Writing graph to : %s \n" % outputConfig.outputFileName)
         plotSpeciesResults(species, ebitParams, outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
     if outputConfig.outputType == 'csv':
-        print("Writing csv to : %s" % outputConfig.outputFileName)
+        print("Writing csv to : %s \n" % outputConfig.outputFileName)
         writeCSVFile(species, ebitParams[0], outputConfig)
+
+    if outputConfig.stepPlot != 0:
+        print("Writing step size plot to %s \n" %os.path.dirname(outputConfig.outputFileName)+os.sep+outputConfig.stepPlot)
+        plotStepSize(species, ebitParams, outputConfig)
+
+    if outputConfig.logOutput in ["True", "T", "Yes", "Y", 1]:
+        sys.stdout = old_stdout
+        log_file.close
     return
 
 
@@ -171,8 +205,12 @@ def processConfigFile(configFileName):
         outputConfig = OutputFormating()
 
         # Read output information
-        outputConfig.outputType = getConfigEntry(config, 'Output', 'outputType', reqd=True, remove_spaces=True)
-        outputConfig.outputFileName = getConfigEntry(config, 'Output', 'outputFileName', reqd=True, remove_spaces=True)
+        outputConfig.outputType =     getConfigEntry(config, 'Output', 'outputType',     reqd=True,  remove_spaces=True)
+        outputConfig.outputFileName = getConfigEntry(config, 'Output', 'outputFileName', reqd=True,  remove_spaces=True)
+        outputConfig.logOutput =      getConfigEntry(config, 'Output', 'logOutput',      reqd=False, remove_spaces=True, default_val=0)
+        outputConfig.stepPlot =       getConfigEntry(config, 'Output', 'stepPlot',       reqd=False, remove_spaces=True, default_val=0)
+        outputConfig.badGuessPlot =   getConfigEntry(config, 'Output', 'badGuessPlot',   reqd=False, remove_spaces=True, default_val=0)
+
 
         outputConfig.xmin = float(getConfigEntry(config, 'matPlotLib', 'graphXMinTime', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.xmax = float(getConfigEntry(config, 'matPlotLib', 'graphXMaxTime', reqd=False, remove_spaces=True, default_val=0))
@@ -180,7 +218,7 @@ def processConfigFile(configFileName):
         outputConfig.ymax = float(getConfigEntry(config, 'matPlotLib', 'graphYMaxPop', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.logx = float(getConfigEntry(config, 'matPlotLib', 'graphXScale', reqd=False, remove_spaces=True, default_val=0))
 
-
+        
         ebitParamsList = tuple(getConfigEntry(config, 'Run', 'beamList', reqd=True, remove_spaces=True).split(","))
         ebitParams = []
         for myebitParams in ebitParamsList:
@@ -200,13 +238,19 @@ def processConfigFile(configFileName):
 
         for myspecies in speciesList:
             # Collect all the species and parameters for each
-            protons = int(getConfigEntry(config, myspecies, 'z', reqd=True, remove_spaces=True))
-            nucleons = int(getConfigEntry(config, myspecies, 'nucleons', reqd=True, remove_spaces=True))
-            population = float(getConfigEntry(config, myspecies, 'populationPercent', reqd=True, remove_spaces=True))
-            chargeStates = list(map(int, getConfigEntry(config, myspecies, 'chargeStates', reqd=True, remove_spaces=True).split(",")))
-            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, 0.0, population, chargeStates))
+            protons      = int  (getConfigEntry(config, myspecies, 'z',                 reqd=True,  remove_spaces=True))
+            nucleons     = int  (getConfigEntry(config, myspecies, 'nucleons',          reqd=True,  remove_spaces=True))
+            population   = float(getConfigEntry(config, myspecies, 'populationPercent', reqd=True,  remove_spaces=True))
+            chargeStates = list (map(int, getConfigEntry(config, myspecies, 'chargeStates', reqd=True, remove_spaces=True).split(",")))
+            betaHalfLife = float(getConfigEntry(config, myspecies, 'betaHalfLife',      reqd=False, remove_spaces=True, default_val=0.0))
+
+            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, betaHalfLife, population, chargeStates))
     else:
         print("Config file does not appear to exist : %s" % configFileName)
+        sys.exit(1)
+
+    if sum([*map(lambda x: x.initSCIPop, species)]) !=1.0:
+        print("Population fractions do not sum to 1.0, please check the configuration file.")
         sys.exit(1)
 
     runSimulation(species, ebitParams, probeFnAddPop, outputConfig)
