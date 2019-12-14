@@ -174,20 +174,6 @@ def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecF
 
 
 
-def betaDecay(mySpecies, species, ebitParams, zindex, tstep):
-    # this needs to calculate the overall rate of change from losses and gains from beta decay
-    mySpeciesIndex = species.index(mySpecies)
-    if zindex >= 1:
-        try:
-            myval = (- (ebitParams.decayConstants[mySpeciesIndex] * mySpecies.tmpPop[zindex]                 )
-                     + (ebitParams.decayConstants[mySpeciesIndex + 1] * species[mySpeciesIndex + 1].tmpPop[zindex]))
-        except IndexError:   # *** PLEASE MAKE SURE THIS IS A DECENT ASSUMPTION OF WHAT I SHOULD DO... TEST ME! ***
-            myval = (-1 * ebitParams.decayConstants[mySpeciesIndex] * mySpecies.tmpPop[zindex])
-    else:
-        myval = 0
-    return tstep * myval
-
-
 def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates,  retK, p1, p2, addWFactor, tstep):
     # K's are the increments used in the Runge Kutta 4 iterative method
 
@@ -375,7 +361,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
             # largeness or smallness, we assigned the correct value to bestStepSize.
             step = 0.9 * bestStepSize
 
-            # Probing the population of each species AFTER the calculation because y1, y12, and y22 are populations at time = time + 2*step
+            # Probing the population of each species
             if t >= nextPrint:
                 nextPrint += ebitParams[0].probeEvery
                 for mySpecies in species:
