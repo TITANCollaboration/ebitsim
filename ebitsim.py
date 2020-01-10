@@ -273,10 +273,35 @@ def processCommandLine(args):
 
     return
 
+def docs_physics():
+	"""
+	The current implementation of CBSim accounts for the following ionization and recombination mechanisms:
+		- electron impact ionization (EI)
+		- radiative recombination (RR)
+		- dielectronic recombination (DR)
+
+	EI and RR rates are calculated using formulae of the form:
+		R_i = J_e/e N_i sigma_i f(e, i)
+
+	where sigma is the cross-section and f(e,i) is an electron-ion overlap factor.
+	"""
+	return
+
+def docs_timestepping():
+	"""
+	Time stepping is using a Runge-Kutte 4 method with an adaptive time step. Because interactions between various populations in the EBIT are accounted for, the overall adapted time step for a single step is limited by any one of the populations. The following illustrates the algorithm:
+
+	blah blah blah
+
+	"""
+
 
 def main():
 
     parser = argparse.ArgumentParser(description='EBIT Charge Breeding Simulation')
+
+    parser.add_argument('-docs', dest='docs', required=False,
+    					help='Obtain documentation about CBSim implementation. Options:\n  - physics\n  - timestepping\n')
 
     parser.add_argument('--configFile', dest='configFile', required=False,
                         help="Specify the complete path to the config file, by default we'll use ebitsim.cfg")
@@ -308,9 +333,19 @@ def main():
 
     args, unknown = parser.parse_known_args()
     # sg.config_file = args.config_file
+    
 
     if platform.python_implementation() == 'CPython':
         print("*** !!WARNING!! : While this can run via normal cPython it is highly recommended that you run it via pypy3 for a HUGE speedup ***")
+
+    # Printing out documentation
+    if args.docs:
+    	try:
+    		print (globals()['docs_'+args.docs].__doc__)
+    	except KeyError:
+    		print('Doc topic does not exist.')
+    	sys.exit(1)
+
 
     if args.protons != 0:
         processCommandLine(args)
