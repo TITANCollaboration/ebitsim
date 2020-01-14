@@ -11,6 +11,7 @@ import argparse
 import configparser
 import csv
 import ebitChargeDistribution
+from ebitsim_docs import *
 from ebitChargeDistribution import probeFnAddPop
 
 import platform
@@ -273,27 +274,6 @@ def processCommandLine(args):
 
     return
 
-def docs_physics():
-	"""
-	The current implementation of CBSim accounts for the following ionization and recombination mechanisms:
-		- electron impact ionization (EI)
-		- radiative recombination (RR)
-		- dielectronic recombination (DR)
-
-	EI and RR rates are calculated using formulae of the form:
-		R_i = J_e/e N_i sigma_i f(e, i)
-
-	where sigma is the cross-section and f(e,i) is an electron-ion overlap factor.
-	"""
-	return
-
-def docs_timestepping():
-	"""
-	Time stepping is using a Runge-Kutte 4 method with an adaptive time step. Because interactions between various populations in the EBIT are accounted for, the overall adapted time step for a single step is limited by any one of the populations. The following illustrates the algorithm:
-
-	blah blah blah
-
-	"""
 
 
 def main():

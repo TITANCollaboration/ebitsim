@@ -166,6 +166,7 @@ def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecF
     else:
         myFuncValues = crossSecFunc(mySpecies.Z, mySpecies.A, ebitParams[0].pressure, ebitParams[0].ionTemperature)
 
+    # Reorganizes output for return
     for r in range(0, len(myFuncValues)):
         interactionRates[r] = myFuncValues[r]
 
@@ -370,10 +371,10 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
     return
 
 def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
-        myEbitParams.currentDensity = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
-        mySpecies.ionizationRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections)
-        mySpecies.rrRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createRRCrossSections)
-        mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createChargeExchangeRates, 1)
+        myEbitParams.currentDensity   = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
+        mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )
+        mySpecies.rrRates             = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,         createRRCrossSections   )
+        mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates, 1)
 
 
 def initEverything(species, ebitParams):

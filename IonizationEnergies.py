@@ -3,8 +3,7 @@
 import csv
 from math import *
 
-# this contains a bunch of misc functions used for calculating ionization breeding
-# in the ebit.
+# this contains a bunch of misc functions for calculating ionization cross-sections in the EBIT.
 # This is also directly translated from the somewhat original Lisp code.
 __MINZ__ = 1
 __MAXZ__ = 105
