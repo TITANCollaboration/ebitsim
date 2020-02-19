@@ -13,6 +13,8 @@ import csv
 import ebitChargeDistribution
 from ebitsim_docs import *
 from ebitChargeDistribution import probeFnAddPop
+from geant4MacroOutput import geant4MacroOutput
+from commonUtils import getElementAbv
 
 import platform
 import sys
@@ -30,17 +32,25 @@ class OutputFormating:
                        xmax=0,
                        ymin=0,
                        ymax=0,
-                       logx=0):
+                       logx=0,
+                       eventsPerTimeSlice=0,
+                       subDivisionOfTime=0):
         self.outputFileName = outputFileName
         self.outputType = outputType
         self.logOutput = logOutput
         self.stepPlot = stepPlot
         self.badGuessPlot = badGuessPlot
+
+        # matPlotLib stuff
         self.xmin = xmin
         self.xmax = xmax
         self.ymin = ymin
         self.ymax = ymax
         self.logx = logx
+
+        #geant4MacroOutput stuff
+        self.eventsPerTimeSlice = eventsPerTimeSlice
+        self.subDivisionOfTime = subDivisionOfTime
 
 
 def column(matrix, index):
@@ -48,15 +58,6 @@ def column(matrix, index):
     # as we can extract out our x,y values
     mycolumn = [i[index] for i in matrix]
     return mycolumn
-
-
-def getElementAbv(z):
-    with open('PeriodicTable.csv', newline='') as csvfile:
-        elements = csv.reader(csvfile, delimiter=',', quotechar='|')
-        for row in elements:
-            if row[0] == str(z):
-                abv = row[2]
-    return abv
 
 
 def plotSpeciesResults(species, ebitParams, outputConfig):
@@ -102,8 +103,6 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     return
 
 
-
-
 def writeCSVFile(species, ebitParams, outputConfig):
     newentry = []
 
@@ -117,37 +116,37 @@ def writeCSVFile(species, ebitParams, outputConfig):
                     newentry = mylabel, myspecies.results[chargeStateResults][myrow][0], myspecies.results[chargeStateResults][myrow][1]
                     csvwriter.writerow(newentry)
     return
-    
+
 
 def writeRates(species, ebitParams, outputConfig):
     # An option to write out the rate matricies for diagnostic purposes.
-    
+
     with open(outputConfig.outputFileName,'w',newline='') as ratesfile:
         csvwriter = csv.writer(ratesfile, delimiter=',', quoting=csv.QUOTE_NONE)
-        
-        # Only showing one of the EBIT parameters, no beam energy scanning!        
-        csvwriter.writerow(['Breeding time: %s' %ebitParams[0].breedingTime])    
+
+        # Only showing one of the EBIT parameters, no beam energy scanning!
+        csvwriter.writerow(['Breeding time: %s' %ebitParams[0].breedingTime])
         csvwriter.writerow(['Beam energy: %s' %ebitParams[0].beamEnergy])
-        
+
         for myspecies in species:
             csvwriter.writerow(['Species = %s' % getElementAbv(myspecies.Z)])
             csvwriter.writerow(['ionization rates for q=0 to %s:' % str(len(myspecies.ionizationRates)-1)])
             for i,j in enumerate(myspecies.ionizationRates):
                 csvwriter.writerow(['q = %s' %i] + [j])
-            
+
             csvwriter.writerow(['radiative recombination rates:'])
             for i,j in enumerate(myspecies.rrRates):
                 csvwriter.writerow(['q = %s' %i] + [j])
-            
+
             csvwriter.writerow(['charge exchange rates:'])
             for i,j in enumerate(myspecies.chargeExchangeRates):
                 csvwriter.writerow(['q = %s' %i] + [j])
-        
+
         csvwriter.writerow(['END'])
 
 def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
     #  Runs the actual simulation via ebitChargeDistribution.calcChargePopulations and then determines how to handle the output
-    
+
     # Option to write to a log.log file in the same directory as the outputFileName
     if outputConfig.logOutput in ["True", "T", "Yes", "Y", 1]:
         print("Writing output to log file...")
@@ -168,6 +167,9 @@ def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
     if outputConfig.outputType == 'csv':
         print("Writing csv to : %s \n" % outputConfig.outputFileName)
         writeCSVFile(species, ebitParams[0], outputConfig)
+    if outputConfig.outputType == 'geant4Macro':
+        print("Writing GEANT4 Macro to : %s \n" % outputConfig.outputFileName)
+        geant4MacroOutput(species, ebitParams[0], outputConfig)
 
     if outputConfig.stepPlot != 0:
         print("Writing step size plot to %s \n" %os.path.dirname(outputConfig.outputFileName)+os.sep+outputConfig.stepPlot)
@@ -212,14 +214,18 @@ def processConfigFile(configFileName):
         outputConfig.stepPlot =       getConfigEntry(config, 'Output', 'stepPlot',       reqd=False, remove_spaces=True, default_val=0)
         outputConfig.badGuessPlot =   getConfigEntry(config, 'Output', 'badGuessPlot',   reqd=False, remove_spaces=True, default_val=0)
 
-
+        # matPlotLib stuff
         outputConfig.xmin = float(getConfigEntry(config, 'matPlotLib', 'graphXMinTime', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.xmax = float(getConfigEntry(config, 'matPlotLib', 'graphXMaxTime', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.ymin = float(getConfigEntry(config, 'matPlotLib', 'graphYMinPop', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.ymax = float(getConfigEntry(config, 'matPlotLib', 'graphYMaxPop', reqd=False, remove_spaces=True, default_val=0))
         outputConfig.logx = float(getConfigEntry(config, 'matPlotLib', 'graphXScale', reqd=False, remove_spaces=True, default_val=0))
 
-        
+        # geant4MacroOutput stuff
+        outputConfig.eventsPerTimeSlice = float(getConfigEntry(config, 'geant4MacroOutput', 'eventsPerTimeSlice', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.subDivisionOfTime = float(getConfigEntry(config, 'geant4MacroOutput', 'subDivisionOfTime', reqd=False, remove_spaces=True, default_val=0))
+
+
         ebitParamsList = tuple(getConfigEntry(config, 'Run', 'beamList', reqd=True, remove_spaces=True).split(","))
         ebitParams = []
         for myebitParams in ebitParamsList:
@@ -313,7 +319,7 @@ def main():
 
     args, unknown = parser.parse_known_args()
     # sg.config_file = args.config_file
-    
+
 
     if platform.python_implementation() == 'CPython':
         print("*** !!WARNING!! : While this can run via normal cPython it is highly recommended that you run it via pypy3 for a HUGE speedup ***")
