@@ -7,9 +7,11 @@ def geant4MacroOutput(species, ebitParams, outputConfig):
 
     # Open the macro file for writing, we should overwrite for now..
     with open(outputConfig.outputFileName, 'w') as geantMacroFile:
-
+# !!! Currently I am not handling the beam energy changes for additional times... I need to do that !!!
         for mySpecies in species:
             mySpeciesName = getElementAbv(mySpecies.Z)
+            particlesOfSpeciesInTrap = mySpecies.populationNumber
+            speciesHalfLife = mySpecies.halfLife
             for chargeStateResults in range(0, len(mySpecies.results)):
                 # mylabel = getElementAbv(mySpecies.Z)
 
@@ -18,6 +20,10 @@ def geant4MacroOutput(species, ebitParams, outputConfig):
                 stepSize = (math.floor(len(mySpecies.results[chargeStateResults]) / outputConfig.subDivisionOfTime))
                 for myrow in range(0, len(mySpecies.results[chargeStateResults]), stepSize):
                     if mySpecies.results[chargeStateResults][myrow][1] != 0:
+                        popInTrap = mySpecies.results[chargeStateResults][myrow][1]
+
+                        decaysPerStep = popInTrap * particlesOfSpeciesInTrap * (math.log(2) / speciesHalfLife) * (ebitParams.breedingTime / outputConfig.subDivisionOfTime)
+                        print("mydcaysomething : %i" % int(decaysPerStep))
                         print("MyRow : %i, Row 0: %f, Row 1: %f" % (myrow, mySpecies.results[chargeStateResults][myrow][0], mySpecies.results[chargeStateResults][myrow][1]))
                         # Write header before each line of beam run macro info so we can split this up easily later
                         geantMacroFile.write("# START: E:%s,Z:%i,A:%i,Q:%i:T:%f\n" % (mySpeciesName,
@@ -35,7 +41,8 @@ def geant4MacroOutput(species, ebitParams, outputConfig):
                                                                                              mySpecies.A,
                                                                                              mySpecies.chargeStates[chargeStateResults],
                                                                                              mySpecies.results[chargeStateResults][myrow][0]))
-                        geantMacroFile.write("/run/beamOn %i\n" % (outputConfig.eventsPerTimeSlice * mySpecies.results[chargeStateResults][myrow][1]))
+                        geantMacroFile.write("/run/beamOn %i\n" % (decaysPerStep))
+                        # geantMacroFile.write("/run/beamOn %i\n" % (outputConfig.eventsPerTimeSlice * mySpecies.results[chargeStateResults][myrow][1]))
                         geantMacroFile.write("# END\n")
                         # geantMacroFile.write("")
     return 0
