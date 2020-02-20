@@ -37,6 +37,8 @@ class Species:
                  betaHalfLife=0.0,
                  initSCIPop=1.0,
                  chargeStates=None,
+                 halfLife=0.0,
+                 populationNumber=0.0,
                  population=None,
                  decayConstant=0.0,
                  ionizationRates=None,
@@ -61,6 +63,8 @@ class Species:
         self.A = A
         self.decaysTo = decaysTo
         self.betaHalfLife = betaHalfLife
+        self.halfLife = halfLife
+        self.populationNumber = populationNumber
         self.betaDecayDelta = betaDecayDelta
         self.truncationError = truncationError
         self.stepCounter = stepCounter
@@ -180,7 +184,7 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
 
     # Lengths here are Z+1 because we have a neutral charge state to account for.
     mySpecies.betaDecayDelta = [0.0]*(Z+1)
-    
+
     nonDecayLastDelta = 0.0
 
     # tmpPop is the population at the beginning, midpoint or end of the interval.
@@ -191,7 +195,7 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
         # print("addWFactor is %s" %str(addWFactor))
         # print("zindex is %s" %str(zindex))
         tmpPop[zindex] = p1[zindex] + (p2[zindex] * addWFactor)
-    
+
     # This only indexes to Z-1 because the Z index is filled separately
     for zindex in range(0, Z):
         # Calculate changes in charge state populations:
@@ -214,7 +218,7 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
 
         retK[zindex] = (nonDecayDelta - nonDecayLastDelta)
         nonDecayLastDelta = nonDecayDelta
-    
+
     # Filling of Z index
     retK[Z] = (-nonDecayLastDelta)
     mySpecies.betaDecayDelta[Z] = mySpecies.tmpPop[Z]*mySpecies.decayConstant*tstep
@@ -269,11 +273,11 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
     # This is an attempt at restructuring adaptiveRkStepper() so that it can perform beta decay much easier. -Zach
     # The essential difference is that I will not be looping through a species, rather performing the time advance
     # for ALL species in one iteration.
-    # To accommodate for the adaptive stepping, I calculate the bestStepSize of each species and use the limiting 
+    # To accommodate for the adaptive stepping, I calculate the bestStepSize of each species and use the limiting
     # value for the next iteration. Therefore the rate of change of one population can limit the whole calculation.
-    # It is slightly slower than the original algorithm and it allows for us to better implement interactions 
+    # It is slightly slower than the original algorithm and it allows for us to better implement interactions
     # between the different species in the EBIT.
-    
+
 
     t = 0.0
     bestStepSize = 0 # This is an overall value that is used after the mySpecies.bestStepSize's are compared.
@@ -303,12 +307,12 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
             # Compute population change for all species in the EBIT.
             for mySpecies in species:
                 # See Wikipedia page for "Adaptive stepsize" for an explanation of how this works
-                # The last input parameters y1, y12 and y22 are actually populations which are being calculated. 
+                # The last input parameters y1, y12 and y22 are actually populations which are being calculated.
                 # y1 is calculated using the derivatives at t0 and evolving forward by 2*tstep
                 # y12 is calculated using the derivatives at t0 and evolving forward by tstep
                 # y22 is calculated using derivatives of y12 at t0 + tstep and evolves forward by tstep, resulting in a total of 2*tstep.
                 # Therfore y22 is a more accurate estimation at t0 + 2*tstep than y1.
-                
+
                 # start = time.time()
                 rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 )
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12)
@@ -324,7 +328,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
 
                 # Keep track of global truncation error
                 mySpecies.truncationError += mySpecies.diff
-            
+
             # If ANY of the diff's are >0, then we perform the bestStepSize calculation
             if any(i>0 for i in map(lambda x: x.diff, species)):
                 # If y22 != y1, we determine the best step size.
@@ -336,7 +340,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # But we DO increment the time... but I can't do it here because then time would change between
                 # species.
                 t += 2*step
-                
+
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
                     mySpecies.population = copy.copy(mySpecies.y22)
@@ -432,7 +436,7 @@ def calcChargePopulations(species, ebitParams, probeFnAddPop):
         print("    Number of bad step guesses... %s" %str(mySpecies.noTooBigSteps))
         print("    Global truncation error... %s" %str(mySpecies.truncationError))
         print("------------------------------------------------------- \n")
-    
+
     print("Clock time for adaptive RK4 algorithm: %s seconds" %str(end-start))
     print("Simulation finished...")
     return
