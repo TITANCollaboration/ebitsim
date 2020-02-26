@@ -3,6 +3,7 @@ import math
 
 
 def geant4MacroOutput(species, ebitParams, outputConfig):
+    total_decays_to_be_simulated = 0
     print("Hello! We're the GEANT4 macro output interface!\n")
 
     # Open the macro file for writing, we should overwrite for now..
@@ -23,6 +24,7 @@ def geant4MacroOutput(species, ebitParams, outputConfig):
                         popInTrap = mySpecies.results[chargeStateResults][myrow][1]
 
                         decaysPerStep = popInTrap * particlesOfSpeciesInTrap * (math.log(2) / speciesHalfLife) * (ebitParams.breedingTime / outputConfig.subDivisionOfTime)
+                        total_decays_to_be_simulated = total_decays_to_be_simulated + decaysPerStep
                         print("mydcaysomething : %i" % int(decaysPerStep))
                         print("MyRow : %i, Row 0: %f, Row 1: %f" % (myrow, mySpecies.results[chargeStateResults][myrow][0], mySpecies.results[chargeStateResults][myrow][1]))
                         # Write header before each line of beam run macro info so we can split this up easily later
@@ -45,4 +47,6 @@ def geant4MacroOutput(species, ebitParams, outputConfig):
                         # geantMacroFile.write("/run/beamOn %i\n" % (outputConfig.eventsPerTimeSlice * mySpecies.results[chargeStateResults][myrow][1]))
                         geantMacroFile.write("# END\n")
                         # geantMacroFile.write("")
+
+    print("total decays that will be simulated : %i over %f s" % (total_decays_to_be_simulated, ebitParams.breedingTime))
     return 0
