@@ -87,42 +87,62 @@ This is a more detailed description of the physics-related input parameters that
 beamEnergy
 ----------
 
+UNITS = eV
+
 The electron beam energy is given in units of eV. This simulation assumes a unform beam energy across the radial profile of the beam. Outside of the parameter 'beamRadius', the beam energy is zero.
+
+A general rule of thumb is that the beam energy should be between 3-4x the ionization energy to optimize for the charge state that you want. This is simply a result of competition with recombination processes in the trap.
 
 breedingTime
 ------------
+
+UNITS = seconds
 
 The full calculation time for the time stepping solver. 
 
 probeEvery
 ----------
 
+UNITS = seconds
+
 For saving space, the output plot showing the charge state distribution only has as much resolution as is given by 'probeEvery'. Keep in mind that this value does not affect the time stepping size used for calculation population rates, it is purely for display purposes.
 
 ionEbeamOverlap
 ---------------
+
+UNITS = unitless
 
 This is currently implemented as a value for the amount of spatial overlap between the electron beam and ion cloud. In a future implementation we will use this to calculate the overlap function, f(e, i).
 
 beamCurrent
 -----------
 
+UNITS = amps
+
 The total current of the electron beam. Is used with 'beamRadius' to calculate the current density and hence the ionization and recombination cross-sections.
 
 beamRadius
 ----------
+
+UNITS = meters
 
 The radius of the electron beam. Current implementation is a hard cutoff for the electron continuum, not a tapered distribution. A top-hat distribution.
 
 pressure
 --------
 
+UNITS = torr
+
 The background pressure in the EBIT trap. This is used to determine the charge exchange rates using a background of H2 gas.
 
 ionTemperature
 --------------
 
-The temperature of the ion cloud. It is used to determine the charge exchange rates by estimating the average ion velocity of a Maxwellian distribution at this temperature.
+UNiTS = Kelvin
+
+The __initial__ temperature of the ion cloud. It is used to determine the charge exchange rates by estimating the average ion velocity of a Maxwellian distribution at this temperature.
+
+A general rule of thumb for setting this value is...
 
 	"""
 

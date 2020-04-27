@@ -30,9 +30,16 @@ INITILIZEDEVERYTHING = 0
 
 
 class Species:
+    """ The Species class is created for each charge state of each species in the EBIT. Each of these populations has their
+    own rates for interactions with other populations in the EBIT. With time evolution, the rates cause the populations to
+    exchange particles (2+ charge state can "feed" 1+ or 3+ by various interactions) or they can exchange heat. This heat exchange
+    will lead to temperature changes which can cause the LOSS of ions. Therefore (once that is implemented) the number of ions
+    in the trap will no longer be conserved.
+    """
     def __init__(self,
                  Z,
                  A,
+                 popTemperature = 0.0,
                  decaysTo=0.0,
                  betaHalfLife=0.0,
                  initSCIPop=1.0,
@@ -59,6 +66,7 @@ class Species:
                  results=[]):
         self.Z = Z
         self.A = A
+        self.popTemperature
         self.decaysTo = decaysTo
         self.betaHalfLife = betaHalfLife
         self.betaDecayDelta = betaDecayDelta
@@ -310,6 +318,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # Therfore y22 is a more accurate estimation at t0 + 2*tstep than y1.
                 
                 # start = time.time()
+                #                                                   initial population,   extrapolated population
                 rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 )
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12)
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22)
