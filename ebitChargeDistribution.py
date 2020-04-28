@@ -39,7 +39,6 @@ class Species:
     def __init__(self,
                  Z,
                  A,
-                 popTemperature = 0.0,
                  decaysTo=0.0,
                  betaHalfLife=0.0,
                  initSCIPop=1.0,
@@ -68,7 +67,6 @@ class Species:
                  results=[]):
         self.Z = Z
         self.A = A
-        self.popTemperature
         self.decaysTo = decaysTo
         self.betaHalfLife = betaHalfLife
         self.halfLife = halfLife
