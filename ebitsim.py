@@ -245,8 +245,9 @@ def processConfigFile(configFileName):
             betaHalfLife = float(getConfigEntry(config, myspecies, 'betaHalfLife', reqd=False, remove_spaces=True, default_val=0.0))
             halfLife = float(getConfigEntry(config, myspecies, 'halfLife', reqd=False, remove_spaces=True, default_val=0.0))
             populationNumber = float(getConfigEntry(config, myspecies, 'populationNumber', reqd=False, remove_spaces=True, default_val=0.0))
+            kT = float(getConfigEntry(config, myspecies, 'kT', reqd=False, remove_spaces=True, default_val=0.0))
 
-            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, betaHalfLife, population, chargeStates, halfLife, populationNumber))
+            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, betaHalfLife, population, chargeStates, halfLife, populationNumber, kT))
     else:
         print("Config file does not appear to exist : %s" % configFileName)
         sys.exit(1)

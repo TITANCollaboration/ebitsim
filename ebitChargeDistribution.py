@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from math import *
 from IonizationEnergies import *
+from ebitThermodynamics import *
 from rr import *
 import copy
 import sys
@@ -16,6 +17,7 @@ __ALPHA__ = 7.2974e-3  # "fine-structure constant"
 __CHEXCONST__ = 2.25e-16  # "Constant for use in charge-exchange "
 __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
 __kB__ = 1.381e-23  # "Boltzmann constant"
+
 
 
 
@@ -44,22 +46,28 @@ class Species:
                  initSCIPop=1.0,
                  chargeStates=None,
                  halfLife=0.0,
+                 kT=[],
                  populationNumber=0.0,
                  population=None,
                  decayConstant=0.0,
                  ionizationRates=None,
                  rrRates=None,
                  chargeExchangeRates=None,
+                 spitzerHeatingRates=None,
                  diff=0.0,
                  bestStepSize=0.0,
                  noTooBigSteps=0.0,
                  betaDecayDelta = 0.0,
                  truncationError = 0.0,
                  stepCounter = 0,
-                 k1=[],
+                 k1=[], # rk4 charge evolution values
                  k2=[],
                  k3=[],
                  k4=[],
+                 j1=[], # rk4 energy evolution values
+                 j2=[],
+                 j3=[],
+                 j4=[],
                  tmpPop=[],
                  y1=[],
                  y12=[],
@@ -70,6 +78,7 @@ class Species:
         self.decaysTo = decaysTo
         self.betaHalfLife = betaHalfLife
         self.halfLife = halfLife
+        self.kT = kT
         self.populationNumber = populationNumber
         self.betaDecayDelta = betaDecayDelta
         self.truncationError = truncationError
@@ -103,19 +112,21 @@ class EbitParams:
                  beamRadius=200.0e-4,
                  pressure=1e-12,
                  ionTemperature=100.0,
+                 electronVelocity=0.0,
                  ignoreBetaDecay=1,
-                 currentDensity=None,
+                 currentDensity=0.0,
                  rkParams=None,
                  decayConstants=[]):  # I'm throwing decay constants in here so I can have those ready for the beta decay stuff without having to pass all the species objects
         self.breedingTime = breedingTime
         self.probeEvery = probeEvery
-        self.ionEbeamOverlap = ionEbeamOverlap
-        self.beamEnergy = beamEnergy
-        self.beamCurrent = beamCurrent
-        self.beamRadius = beamRadius
-        self.pressure = pressure
-        self.ionTemperature = ionTemperature
-        self.currentDensity = currentDensity
+        self.ionEbeamOverlap = ionEbeamOverlap # unitless
+        self.beamEnergy = beamEnergy # eV
+        self.beamCurrent = beamCurrent # A
+        self.beamRadius = beamRadius # cm^2
+        self.pressure = pressure # Torr
+        self.ionTemperature = ionTemperature # will get rid of
+        self.electronVelocity = __C__*np.sqrt(1-(beamEnergy/__EMASS__+1)**-2) # cm/s
+        self.currentDensity = currentDensity # A/cm^2
         self.rkParams = rkParams
         self.decayConstants = decayConstants
         self.ignoreBetaDecay = ignoreBetaDecay
@@ -152,6 +163,11 @@ def createChargeExchangeRates(Z, A, pressure, ionTemperature):
 
 
 def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
+    # Interaction rate formulae for EII and RR:
+    #       Rate = (number density)(electron velocity)(cross section)(number of reaction ions)(overlap function)
+    #
+    # This returns the "static" parts of the interaction rate which can be calculated before the time stepping.
+    #
     # From Lisp Code :
     #  "Calculate the rate for a specific interaction (ionization/rr/..)
     #  inside the trap given the BEAM-ENERGY in eV, CURRENT-DENSITY in
@@ -160,9 +176,12 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     interactionRate = [0] * (Z + 1)
 
     electronVelocity = __C__ * sqrt(2 * (beamEnergy / __EMASS__))
+
+    # electron number density
     electronRate = currentDensity / __ECHG__ / electronVelocity
 
     for i in range(0, Z + 1):
+        # number density X velocity X cross section = rate
         interactionRate[i] = crossSections[i] * electronVelocity * electronRate
 
     return interactionRate
@@ -186,11 +205,10 @@ def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecF
 
 
 def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates,  retK, p1, p2, addWFactor, tstep):
-    # K's are the increments used in the Runge Kutta 4 iterative method
+    # k's are the increments used in the Runge Kutta 4 iterative method
 
     # Lengths here are Z+1 because we have a neutral charge state to account for.
     mySpecies.betaDecayDelta = [0.0]*(Z+1)
-
     nonDecayLastDelta = 0.0
 
     # tmpPop is the population at the beginning, midpoint or end of the interval.
@@ -229,7 +247,7 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
     retK[Z] = (-nonDecayLastDelta)
     mySpecies.betaDecayDelta[Z] = mySpecies.tmpPop[Z]*mySpecies.decayConstant*tstep
 
-
+    # The portion deals with cross-species rates of beta decay. Determines if neighboring species affect each other.
     mySpeciesIndex = species.index(mySpecies)
     if mySpeciesIndex != 0 and mySpecies.Z - species[mySpeciesIndex-1].Z == 1:
         # first condition: if mySpeciesIndex==0, then nothing is populating our species with beta decay
@@ -304,10 +322,17 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
             print("\n***Please note that the inclusion of beta decay physics significantly increases computation time!***")
 
         timeToBreed = timeToBreed + myEbitParams.breedingTime
+
+        # Calculate the static portions of the interaction rates. New one for each new EBIT configuration
         for mySpecies in species:
             calcRateMatrices(mySpecies, myEbitParams, ebitParams)
 
+            calcEnergyRates(mySpecies, myEbitParams, ebitParams)
+            print("Calculating energy rates...")
+            print(str(mySpecies.spitzerHeatingRates))
+
         # Enter rk stepping loop
+
         while t <= timeToBreed:
 
             # Compute population change for all species in the EBIT.
@@ -343,9 +368,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                     if mySpecies.diff != 0:
                         mySpecies.bestStepSize = step * ((ebitParams[0].rkParams.desiredAccuracy / mySpecies.diff) ** 0.2)
             else:
-                # If y1 == y22 for all species (unlikely), then we commit the y22 population of every species and continue without adjusting the step size.
-                # But we DO increment the time... but I can't do it here because then time would change between
-                # species.
+                # If y1 == y22 for all species (unlikely), then we chose the perfect step size.
+                # we commit y22 and continue to the next step
                 t += 2*step
 
                 for mySpecies in species:
@@ -376,13 +400,23 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
             # Probing the population of each species
             if t >= nextPrint:
                 nextPrint += ebitParams[0].probeEvery
+                # print("noTooBigSteps: %s"%str(mySpecies.noTooBigSteps))
                 for mySpecies in species:
                     probeFnAddPop(t, ebitParams[0], mySpecies)
+        # print("Final step size: %s"%str(step))
 
     return
 
+def calcEnergyRates(mySpecies, myEbitParams, ebitParams):
+
+    # charge states is range(0, mySpecies.Z + 1)
+    # For each charge state of the species, we need a rate calculation for Spitzer heating
+    mySpecies.spitzerHeatingRates = rateSpitzerHeating(mySpecies, myEbitParams)
+
+
 def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
         myEbitParams.currentDensity   = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
+        # removed above to calculate it during the class instantiation
         mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )
         mySpecies.rrRates             = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,         createRRCrossSections   )
         mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates, 1)
@@ -401,6 +435,8 @@ def initEverything(species, ebitParams):
 
     # if species[0].betaHalfLife != 0.0:  # The largest Z value species is not allowed to have a beta decay
     #     raise ValueError("Can not handle having a beta decay for highest Z species")
+    for myEbitParams in ebitParams:
+        print("Electron velocity %s c"%str(myEbitParams.electronVelocity/__C__)+", number density %s"%str(myEbitParams.currentDensity/(myEbitParams.electronVelocity*__ECHG__)))
 
     for mySpecies in species:
         # Initilize everything ...
