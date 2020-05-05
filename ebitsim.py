@@ -233,6 +233,7 @@ def processConfigFile(configFileName):
             ionTemperature = float(getConfigEntry(config, myebitParams, 'ionTemperature', reqd=False, remove_spaces=True, default_val=0.0))
             ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature))
 
+        # Gets the speciesList from under the [Run] headline
         speciesList = tuple(getConfigEntry(config, 'Run', 'speciesList', reqd=True, remove_spaces=True).split(","))
         species = []
 
@@ -245,9 +246,9 @@ def processConfigFile(configFileName):
             betaHalfLife = float(getConfigEntry(config, myspecies, 'betaHalfLife', reqd=False, remove_spaces=True, default_val=0.0))
             halfLife = float(getConfigEntry(config, myspecies, 'halfLife', reqd=False, remove_spaces=True, default_val=0.0))
             populationNumber = float(getConfigEntry(config, myspecies, 'populationNumber', reqd=False, remove_spaces=True, default_val=0.0))
-            kT = float(getConfigEntry(config, myspecies, 'kT', reqd=False, remove_spaces=True, default_val=0.0))
-
-            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, betaHalfLife, population, chargeStates, halfLife, populationNumber, kT))
+            initSCITemp = float(getConfigEntry(config, myspecies, 'initSCITemp', reqd=False, remove_spaces=True, default_val=0.0))
+# NkT
+            species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, betaHalfLife, population, chargeStates, halfLife, populationNumber, initSCITemp))
     else:
         print("Config file does not appear to exist : %s" % configFileName)
         sys.exit(1)

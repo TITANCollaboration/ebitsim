@@ -5,7 +5,6 @@ from math import *
 import copy
 import sys
 import time
-import numpy as np
 
 """
 This module contains many of the functions for calculating energy dynamics of the charge state distribution. 
@@ -46,11 +45,11 @@ def coulombLogarithm_ei(Eb, qi):
 	if qi==0:
 		return 0
 	r_dt = 7e-1 # 0.7 cm, 0.25 cm for neighbors
-	b90 = __ECHG__**2*qi/(8*np.pi*__EPSILON0__*Eb*__EVCONV__) # 90 deg impact parameter. Convert eV to J.
+	b90 = __ECHG__**2*qi/(8*pi*__EPSILON0__*Eb*__EVCONV__) # 90 deg impact parameter. Convert eV to J.
 
 	# should be on the order of 10
 	# With argon and 7 keV beam, we get about 24--22
-	return np.log(r_dt/b90)
+	return log(r_dt/b90)
 
 def rateSpitzerHeating(mySpecies, myEbitParams):
 	""" Landau-Spitzer heating of ion bunches by the electron beam. This calculates all of the static values, while the
@@ -73,7 +72,7 @@ def rateSpitzerHeating(mySpecies, myEbitParams):
 	rates = [0]*(mySpecies.Z + 1)
 	for i in range(0, mySpecies.Z+1):
 		# the factor 1e4 ahead is conversion for cm^2 to m^2 to get the correct units.
-		rates[i] = (1e4/__EVCONV__)*(__ECHG__*i*__ECHG__)**2 *numberDensity*coulombLogarithm_ei(myEbitParams.beamEnergy, i)/(6*np.pi*__EPSILON0__**2 * mi * myEbitParams.electronVelocity)
+		rates[i] = (1e4/__EVCONV__)*(__ECHG__*i*__ECHG__)**2 *numberDensity*coulombLogarithm_ei(myEbitParams.beamEnergy, i)/(6*pi*__EPSILON0__**2 * mi * myEbitParams.electronVelocity)
 		# print("Coulomb Log: %s"%str(coulombLogarithm_ei(myEbitParams.beamEnergy, i)))
 	return rates
 
