@@ -67,7 +67,7 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     for myspecies in species:
         for chargeStateResults in range(0, len(myspecies.results)):
             mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults]) + '+'
-            default_cycler = (cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'k']) + cycler(linestyle=['--', '-', ':', '-.', '--', '-', ':']))
+            default_cycler = (cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'r']) + cycler(linestyle=['--', '-', ':', '-.', '--', '-', ':']))
             plt.rc('lines', linewidth=2)
             plt.rc('grid', color='k', linestyle=':', linewidth=0.5)
             plt.rc('axes', grid=True, prop_cycle=default_cycler)
@@ -93,6 +93,29 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     plt.legend(framealpha=0.5)
     plt.savefig(outputConfig.outputFileName, dpi=300)
 
+    return
+
+def plotSpeciesEnergies(species, ebitParams, outputConfig):
+    import matplotlib
+    # matplotlib.use("TKAgg")
+    import matplotlib.pyplot as plt
+    from cycler import cycler
+
+
+    plt.rcParams['legend.loc'] = 'best'
+    plt.figure()
+    for mySpecies in species:
+        for qResults in range(0, len(mySpecies.results)):
+            mylabel = getElementAbv(mySpecies.Z) + str(mySpecies.chargeStates[qResults])
+
+            plt.plot(column(mySpecies.results[qResults], 0), column(mySpecies.results[qResults], 2), label=mylabel)
+
+            if outputConfig.logx == 1:
+                plt.xscale('log')
+    plt.ylabel("Energy [eV]")
+    plt.xlabel("Breeding time [s]")
+    plt.legend(framealpha=0.5)
+    plt.savefig(outputConfig.outputFileName.split(".")[0]+"_energy.png", dpi=300)
     return
 
 
@@ -156,8 +179,11 @@ def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
         print("Writing rates to csv: %s \n" % outputConfig.outputFileName)
         writeRates(species, ebitParams, outputConfig)
     if outputConfig.outputType == 'matplotlib':
-        print("Writing graph to : %s \n" % outputConfig.outputFileName)
+        print("Writing charge state graph to : %s" % outputConfig.outputFileName)
         plotSpeciesResults(species, ebitParams, outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
+        if species[0].initSCITemp != None: # if including energy dynamics, plot that too
+            print("Writing energy graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_energy.png"))
+            plotSpeciesEnergies(species, ebitParams, outputConfig)
     if outputConfig.outputType == 'csv':
         print("Writing csv to : %s \n" % outputConfig.outputFileName)
         writeCSVFile(species, ebitParams[0], outputConfig)
@@ -246,7 +272,7 @@ def processConfigFile(configFileName):
             betaHalfLife = float(getConfigEntry(config, myspecies, 'betaHalfLife', reqd=False, remove_spaces=True, default_val=0.0))
             halfLife = float(getConfigEntry(config, myspecies, 'halfLife', reqd=False, remove_spaces=True, default_val=0.0))
             populationNumber = float(getConfigEntry(config, myspecies, 'populationNumber', reqd=False, remove_spaces=True, default_val=0.0))
-            initSCITemp = float(getConfigEntry(config, myspecies, 'initSCITemp', reqd=False, remove_spaces=True, default_val=0.0))
+            initSCITemp = float(getConfigEntry(config, myspecies, 'initSCITemp', reqd=False, remove_spaces=True, default_val=-1.0))
 # NkT
             species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, betaHalfLife, population, chargeStates, halfLife, populationNumber, initSCITemp))
     else:

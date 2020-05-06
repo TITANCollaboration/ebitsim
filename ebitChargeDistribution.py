@@ -47,8 +47,8 @@ class Species:
                  chargeStates=None,
                  halfLife=0.0,
                  populationNumber=0.0,
-                 initSCITemp = 0.0,
-                 NkT=None, # total energy of charge state of the species.
+                 initSCITemp = None,
+                 NkT=0.0, # total energy of charge state of the species.
                  population=None,
                  decayConstant=0.0,
                  ionizationRates=None,
@@ -378,7 +378,7 @@ def probeFnAddPop(time, ebitParams, mySpecies):
     for chargeIndex in range(0, len(mySpecies.chargeStates)):
         if len(mySpecies.results) < len(mySpecies.chargeStates):
             mySpecies.results.append([]) # Pre-allocate the size of .results
-        mySpecies.results[chargeIndex].append([time, mySpecies.population[mySpecies.chargeStates[chargeIndex]]])
+        mySpecies.results[chargeIndex].append([time, mySpecies.population[mySpecies.chargeStates[chargeIndex]], mySpecies.NkT[mySpecies.chargeStates[chargeIndex]]])
 
 
 
@@ -419,11 +419,13 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
         # Calculate the static portions of the interaction rates. New one for each new EBIT configuration
         for mySpecies in species:
             calcRateMatrices(mySpecies, myEbitParams, ebitParams)
-
-            calcEnergyRates(mySpecies, myEbitParams, ebitParams)
-
             mySpecies.NkT = [0.0 for i in range(0, mySpecies.Z+1)]
-            mySpecies.NkT[1] = mySpecies.initSCITemp # initialize energy array with the SCI energy
+
+            if mySpecies.initSCITemp != -1:
+                print("initSCITemp detected... including energy dynamics")
+                calcEnergyRates(mySpecies, myEbitParams, ebitParams)
+                # print(mySpecies.spitzerHeatingRates)
+                mySpecies.NkT[1] = mySpecies.initSCITemp # initialize energy array with the SCI energy
 
         # Enter rk stepping loop
         while t <= timeToBreed:
@@ -468,7 +470,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
 
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
-                    mySpecies.NkT = rkStepEnergy(ebitParams[0], mySpecies, species, 2*step, mySpecies.NkT)
+                    if mySpecies.initSCITemp != -1:
+                        mySpecies.NkT = rkStepEnergy(ebitParams[0], mySpecies, species, 2*step, mySpecies.NkT)
                     mySpecies.population = copy.copy(mySpecies.y22)
                     
 
@@ -482,7 +485,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 bestStepSize = min(map(lambda x: x.bestStepSize, species))
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
-                    mySpecies.NkT = rkStepEnergy(ebitParams[0], mySpecies, species, 2*step, mySpecies.NkT) # we use population before y22 is written to it.
+                    if mySpecies.initSCITemp != -1:
+                        mySpecies.NkT = rkStepEnergy(ebitParams[0], mySpecies, species, 2*step, mySpecies.NkT) # we use population before y22 is written to it.
                     mySpecies.population = copy.copy(mySpecies.y22)
             else:
                 # If we get here, one of the mySpecies.bestStepSize values is smaller than step
@@ -500,7 +504,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 nextPrint += ebitParams[0].probeEvery
                 # print("noTooBigSteps: %s"%str(mySpecies.noTooBigSteps))
                 for mySpecies in species:
-                    print("probing energy...  %s"%str(mySpecies.NkT))
+                    # print("probing energy...  %s"%str(mySpecies.NkT))
                     probeFnAddPop(t, ebitParams[0], mySpecies)
         # print("Final step size: %s"%str(step))
 
