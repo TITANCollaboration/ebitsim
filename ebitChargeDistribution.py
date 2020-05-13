@@ -48,6 +48,7 @@ class Species:
                  halfLife=0.0,
                  populationNumber=0.0,
                  initSCITemp = None,
+                 # The lines above need to stay in the same order
                  NkT=0.0, # total energy of charge state of the species.
                  population=None,
                  decayConstant=0.0,
@@ -148,14 +149,23 @@ def createDecayConstants(betaHalfLife):
 
 
 def createChargeExchangeRates(Z, A, pressure, ionTemperature):
+    """ The rate is the product of the cross section, an average velocity, and a number density
+
+    Here, sigV includes both the cross section and the average velocity. The cross section is
+    given by __CHEXCONST__ * log(15/avgIonVinBohr)
+
+    It looks like avgIonV is taken as the average velocity from a Maxwell distribution, but the
+    units don't work out quite correctly. The __C__ should not be there?
+    """
     # We are not sure of where this formula for CX cross sections is derived from
     # possibly might change to formulation of Salzborn & Mueller 1977 work.
     chargeExchangeRates = [0] * (Z + 1)
 
     # Need to return a Z+1 array
-    h2Density = pressure * __TORR__
+    h2Density = pressure * __TORR__ # using IGL, determine number density of H2 from the prescribed pressure
     ionMassInAMU = A * __AMU__
     avgIonV = __C__ * sqrt(8.0 * (ionTemperature / (pi * ionMassInAMU)))
+
     avgIonVinBohr = avgIonV / __VBOHR__
     sigV = __CHEXCONST__ * log( 15.0 / avgIonVinBohr) * avgIonV
 
@@ -203,7 +213,7 @@ def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecF
 
     return interactionRates
 
-def calculateIonHeating(mySpecies, species, Z, spitzerHeatingRates, tstep):
+def calculateIonHeating(mySpecies, Z, spitzerHeatingRates, tstep):
     retArray = [0.0 for i in range(0, Z+1)]
 
     for qindex in range(0, Z+1):
@@ -331,6 +341,7 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
 
 def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTtstep):
     # longer function param calls yes but it speeds it up calculateK by 10%...
+
     mySpecies.k1 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
     mySpecies.k2 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, populationAtT0, mySpecies.k1,     0.5, tstep)
     mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0, mySpecies.k2,     0.5, tstep)
@@ -364,7 +375,7 @@ def rkStepEnergy(ebitParams, mySpecies, species, tstep, energyAtT0):
 
     # Updates the energy of each charge state in the species.
     for qindex,val in enumerate(energyAtT0):
-        energyAtTtStep[qindex] = energyAtT0[qindex] + calculateIonHeating(mySpecies, species, mySpecies.Z, mySpecies.spitzerHeatingRates, tstep)[qindex]
+        energyAtTtStep[qindex] = energyAtT0[qindex] + calculateIonHeating(mySpecies, mySpecies.Z, mySpecies.spitzerHeatingRates, tstep)[qindex]
 
         # energyAtTtstep[qindex] = energyAtT0[qindex] + ((1 / 6) * (mySpecies.j1[qindex] + (2 * (mySpecies.j2[qindex] + mySpecies.j3[qindex])) + mySpecies.j4[qindex]) )
     return energyAtTtStep
@@ -576,7 +587,7 @@ def calcChargePopulations(species, ebitParams, probeFnAddPop):
     for mySpecies in species:
         print("------------------------------------------------------- \n")
         print("Species diagnostics for Z = %s:" %str(mySpecies.Z))
-        print("    Checking final EBIT population of species... %s" %str(sum([i[-1][-1] for i in mySpecies.results]) ))
+        print("    Checking final EBIT population of species... %s" %str(sum([i[-1][1] for i in mySpecies.results]) ))
         print("    Total number of time steps used... %s" %str(mySpecies.stepCounter) )
         print("    Number of bad step guesses... %s" %str(mySpecies.noTooBigSteps))
         print("    Global truncation error... %s" %str(mySpecies.truncationError))

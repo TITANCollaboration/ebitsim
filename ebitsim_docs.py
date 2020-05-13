@@ -9,7 +9,16 @@ def docs_physics():
 
 General
 -------
-The current implementation of CBSim accounts for the following ionization and recombination mechanisms:
+
+Following the 2005 paper by Fred Currell and Gerd Fussmann, we consider the following simplifications:
+ 
+ 1. The electron beam has a radial top hat profile. The radius prescribed in the configuration file is nearly the same as the Herrmann radius. Inside of this radius is an electron beam of uniform density and energy and outside of the radius is zero charge.
+
+ 2. For both the electron beam and the ion cloud, we assume that the axial distributiona are uniform along the length of the trap.
+
+ 3. (currently being implemented) The radial distribution of ions depends on charge state. They follow a Boltzmann distribution.
+
+ The current implementation of CBSim accounts for the following ionization and recombination mechanisms:
 	- electron impact ionization (EI)
 	- radiative recombination (RR)
 	- charge exchange (CX)
@@ -20,6 +29,8 @@ For a species in a specified charge state i, the rate equation is written as
 		 + (RR rate of charge state i+1) - (RR rate of charge state i  )
 		 + (CX rate of charge state i+1) - (CX rate of charge state i  )
 		 - Resc
+
+Where Ni is the total number of ions per length in the trap. It's a good idea to look this up. At TITAN we can inject about 10^6 ions per bunch, but we can load up to a total capacity of about 10^8? I'm not sure, but check the Thesis of Annika Lennarz and the section where she discusses the stacked injection scheme.
 
 The final term in the equation is accounting for the rate at which ions can escape the trap. This escape occurs either radially or axially when the ion obtains enough kinetic energy to overcome the poitentials of the trap.
 

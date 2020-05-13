@@ -69,7 +69,7 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
             mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults]) + '+'
             default_cycler = (cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'r']) + cycler(linestyle=['--', '-', ':', '-.', '--', '-', ':']))
             plt.rc('lines', linewidth=2)
-            plt.rc('grid', color='k', linestyle=':', linewidth=0.5)
+            plt.rc('grid', color='k', linestyle=':', linewidth=0.5) 
             plt.rc('axes', grid=True, prop_cycle=default_cycler)
             plt.plot(column(myspecies.results[chargeStateResults], 0), column(myspecies.results[chargeStateResults], 1), label=mylabel)
 
@@ -102,11 +102,15 @@ def plotSpeciesEnergies(species, ebitParams, outputConfig):
     from cycler import cycler
 
 
+
     plt.rcParams['legend.loc'] = 'best'
     plt.figure()
     for mySpecies in species:
         for qResults in range(0, len(mySpecies.results)):
             mylabel = getElementAbv(mySpecies.Z) + str(mySpecies.chargeStates[qResults])
+
+            # Wanting to get average energy by dividing by population, but getting ZeroDivision error...
+            # val = [i[1]/i[0] for i in zip( column(mySpecies.results[qResults], 1), column(mySpecies.results[qResults], 2)) ]
 
             plt.plot(column(mySpecies.results[qResults], 0), column(mySpecies.results[qResults], 2), label=mylabel)
 
@@ -273,15 +277,15 @@ def processConfigFile(configFileName):
             halfLife = float(getConfigEntry(config, myspecies, 'halfLife', reqd=False, remove_spaces=True, default_val=0.0))
             populationNumber = float(getConfigEntry(config, myspecies, 'populationNumber', reqd=False, remove_spaces=True, default_val=0.0))
             initSCITemp = float(getConfigEntry(config, myspecies, 'initSCITemp', reqd=False, remove_spaces=True, default_val=-1.0))
-# NkT
+
             species.append(ebitChargeDistribution.Species(protons, nucleons, 0.0, betaHalfLife, population, chargeStates, halfLife, populationNumber, initSCITemp))
     else:
         print("Config file does not appear to exist : %s" % configFileName)
         sys.exit(1)
 
-    if sum([*map(lambda x: x.initSCIPop, species)]) !=1.0:
-        print("Population fractions do not sum to 1.0, please check the configuration file.")
-        sys.exit(1)
+    # if sum([*map(lambda x: x.initSCIPop, species)]) !=1.0:
+    #     print("Population fractions do not sum to 1.0, please check the configuration file.")
+    #     sys.exit(1)
 
     runSimulation(species, ebitParams, probeFnAddPop, outputConfig)
     return 0

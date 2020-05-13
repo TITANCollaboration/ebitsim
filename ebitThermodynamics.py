@@ -35,6 +35,42 @@ __MAXCHARGE__ = 105
 __MAXSPECIES__ = 1000
 
 
+
+def ebeamPotential(r, re, Ee, I):
+	""" Returns the space charge potential at some radial point r.
+
+	Requires the radius of the electron beam re [cm], the electron energy [eV],
+	and the total current [A]
+	"""
+	top = 30*I
+	bottom = sqrt(1 - ((energy/__EMASS__)+1)**(-2))
+
+	V0 = top/bottom
+	if r <= re:
+		return V0*(r/re)**2
+	elif r > re:
+		return V0*(2*log(r/re)+1)
+
+def trapDepth(Vset, re, Ee, I):
+	""" Returns the approximate trap depth by accounting for the space charge of the
+	electron beam.
+	"""
+	rTrap = 0.7  # 7mm inner radius of TRAP DT
+	rSide = 0.25 # 2.5mm inner radius of side DT's
+
+	return Vset + (ebeamPotential(rSide, re, Ee, I) - ebeamPotential(rTrap, re, Ee, I))
+
+def electronIonOverlapFunction(q, ):
+	""" The distribution of each charge state of the ions takes on a Boltzmann distribution.
+
+	We need to get the average energy of an ion, so we divide the total energy by the number of
+	ions in that state... but we are using population fractions... so I divide by what exactly...
+
+	I am thinking that we need to 
+	"""
+	return
+
+
 def coulombLogarithm_ei(Eb, qi):
 	""" The Coulomb logarithm for electron-ion collisions. The natural log of the ratio of the maximum impact
 	parameter to the minimum impact parameter. In a plasma the maximum parameter would usually be the Debye
