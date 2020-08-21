@@ -107,15 +107,18 @@ def plotSpeciesEnergies(species, ebitParams, outputConfig):
     plt.figure()
     for mySpecies in species:
         for qResults in range(0, len(mySpecies.results)):
-            mylabel = getElementAbv(mySpecies.Z) + str(mySpecies.chargeStates[qResults])
 
-            # Wanting to get average energy by dividing by population, but getting ZeroDivision error...
-            # val = [i[1]/i[0] for i in zip( column(mySpecies.results[qResults], 1), column(mySpecies.results[qResults], 2)) ]
+            mylabel = getElementAbv(mySpecies.Z) + str(mySpecies.chargeStates[qResults])
 
             plt.plot(column(mySpecies.results[qResults], 0), column(mySpecies.results[qResults], 2), label=mylabel)
 
+            if outputConfig.xmin or outputConfig.xmax != 0:
+                plt.xlim(outputConfig.xmin, outputConfig.xmax)
+            if outputConfig.ymin or outputConfig.ymax != 0:
+                plt.ylim(outputConfig.ymin, outputConfig.ymax)
             if outputConfig.logx == 1:
                 plt.xscale('log')
+                # plt.yscale('log')
     plt.ylabel("Energy [eV]")
     plt.xlabel("Breeding time [s]")
     plt.legend(framealpha=0.5)

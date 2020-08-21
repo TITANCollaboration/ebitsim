@@ -108,10 +108,38 @@ def rateSpitzerHeating(mySpecies, myEbitParams):
 	rates = [0]*(mySpecies.Z + 1)
 	for i in range(0, mySpecies.Z+1):
 		# the factor 1e4 ahead is conversion for cm^2 to m^2 to get the correct units.
-		rates[i] = (1e4/__EVCONV__)*(__ECHG__*i*__ECHG__)**2 *numberDensity*coulombLogarithm_ei(myEbitParams.beamEnergy, i)/(6*pi*__EPSILON0__**2 * mi * myEbitParams.electronVelocity)
+		rates[i] = (1e4/__EVCONV__)*(__ECHG__*i*__ECHG__)**2 *numberDensity*coulombLogarithm_ei(myEbitParams.beamEnergy, i)/(4*pi*__EPSILON0__**2 * mi * myEbitParams.electronVelocity)
 		# print("Coulomb Log: %s"%str(coulombLogarithm_ei(myEbitParams.beamEnergy, i)))
 	return rates
 
+
+def coulombLogarithm_ii(mySpecies, species):
+	""" The Coulomb logarithm for ion-ion collisions. 
+
+	Semi-empirical formulae obtained from the 2019 Plasma Formulary from the US Naval Research Laboratory:
+
+	https://www.nrl.navy.mil/ppd/content/nrl-plasma-formulary 
+
+	------------
+
+	This is required for the Fokker-Planck equation, which determines if an energetic ion will escape the trap potential.
+
+	"""
+	return
+
+def ionIonInteractionTime(species_i, species_j):
+	""" This is the characteristic relaxation time for two species i and j to interact with each other. This can be
+	different charge states of the same element, or also different elements. The latter part will take time to
+	implement, so I just look at the former for now.
+
+	will use coulombLogarithm_ii(species_i, species_j)
+	
+	
+	"""
+
+
+
+	return
 
 # def calcCoulombLogarithm_ei(mySpecies, myEbitParams):
 # 	""" The Coulomb logarithm for electron-ion collisions. 
@@ -140,19 +168,7 @@ def rateSpitzerHeating(mySpecies, myEbitParams):
 # 		# If we come here there is also a problem
 # 		sys.exit(1)
 
-def coulombLogarithm_ii(mySpecies, species):
-	""" The Coulomb logarithm for ion-ion collisions. 
 
-	Semi-empirical formulae obtained from the 2019 Plasma Formulary from the US Naval Research Laboratory:
-
-	https://www.nrl.navy.mil/ppd/content/nrl-plasma-formulary 
-
-	------------
-
-	This is required for the Fokker-Planck equation, which determines if an energetic ion will escape the trap potential.
-
-	"""
-	return
 
 
 
