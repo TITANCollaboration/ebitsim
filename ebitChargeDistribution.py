@@ -17,6 +17,7 @@ __ALPHA__ = 7.2974e-3  # "fine-structure constant"
 __CHEXCONST__ = 2.25e-16  # "Constant for use in charge-exchange "
 __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
 __kB__ = 1.381e-23  # "Boltzmann constant"
+__Epgas__ = 15.42593 # first ionization potential of H2 gas in eV
 
 
 
@@ -182,6 +183,21 @@ def createChargeExchangeRates(Z, A, pressure, ionTemperature):
     return chargeExchangeRates
 
 
+def createChargeExchangeRates_MS(Z, A, pressure, ionTemperature):
+    """ An implementation using the work of Salzborn and Mueller from 1977 paper.
+    """
+
+    chargeExchangeRates = [0] * (Z + 1)
+
+    h2Density = pressure * __TORR__
+    ionMassInAMU = A*__AMU__
+
+    sigV = __SALZBORNAK__*__Epgas__**__SALZBORNBETAK__
+    for i in range(1, Z+1):
+        chargeExchangeRates[i] =h2Density*sigV*i**__SALZBORNALPHAK__
+    return chargeExchangeRates
+
+
 def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     # Interaction rate formulae for EII and RR:
     #       Rate = (number density)(electron velocity)(cross section)(number of reaction ions)(overlap function)
@@ -195,7 +211,8 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     #  interaction. Returns array of size Z-ION+1 with rates."
     interactionRate = [0] * (Z + 1)
 
-    electronVelocity = __C__ * sqrt(2 * (beamEnergy / __EMASS__))
+    electronVelocity = __C__*sqrt(1-(beamEnergy/__EMASS__+1)**-2)
+    # electronVelocity = __C__ * sqrt(2 * (beamEnergy / __EMASS__))
 
     # electron number density
     electronRate = currentDensity / __ECHG__ / electronVelocity
@@ -568,7 +585,7 @@ def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
     # removed above to calculate it during the class instantiation
     mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )
     mySpecies.rrRates             = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,         createRRCrossSections   )
-    mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates, 1)
+    mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates_MS, 1)
 
 
 def initEverything(species, ebitParams):
