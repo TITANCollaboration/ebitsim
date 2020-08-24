@@ -149,11 +149,20 @@ The background pressure in the EBIT trap. This is used to determine the charge e
 ionTemperature
 --------------
 
-UNiTS = Kelvin
+UNITS = Kelvin
 
 The __initial__ temperature of the ion cloud. It is used to determine the charge exchange rates by estimating the average ion velocity of a Maxwellian distribution at this temperature.
 
 A general rule of thumb for setting this value is...
+
+populationPercent
+-----------------
+
+UNITS = fraction
+
+A fraction of the total population given for the species. If we start with a single species and populationPercent=1.0, then 100% of the population is this species. The program will renormalize the inputs, therefore if we have two species, each with populationPercent=1.0, then they each garner 50% of the total population.
+
+Please note that the current configutation is that the initial population is ALL singly charged ions (SCI). We might make this customizable in the future.
 
 	"""
 

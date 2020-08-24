@@ -108,6 +108,7 @@ def rateSpitzerHeating(mySpecies, myEbitParams):
 	rates = [0]*(mySpecies.Z + 1)
 	for i in range(0, mySpecies.Z+1):
 		# the factor 1e4 ahead is conversion for cm^2 to m^2 to get the correct units.
+		# I see an extra factor of __ECHG__**2, not sure why I added that?
 		rates[i] = (1e4/__EVCONV__)*(__ECHG__*i*__ECHG__)**2 *numberDensity*coulombLogarithm_ei(myEbitParams.beamEnergy, i)/(4*pi*__EPSILON0__**2 * mi * myEbitParams.electronVelocity)
 		# print("Coulomb Log: %s"%str(coulombLogarithm_ei(myEbitParams.beamEnergy, i)))
 	return rates
