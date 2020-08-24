@@ -494,35 +494,6 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
                 energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-2*deltaPop[0]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
             except ZeroDivisionError:
                 energyAtTtstep[q] = energyAtT0[q]
-        
-
-
-
-    # deltaPop = [gain by q(i-1), loss by q(i), gain by q(i+1)]
-    # deltaPop = [(mySpecies.r1[0][i] + (2 * (mySpecies.r2[0][i] + mySpecies.r3[0][i])) + mySpecies.r4[0][i])/6 for i in range(0,3)]
-
-    # # Update the energy of each charge state population
-    # # at q=0, only consider loss by q and gain by q+1
-    # ''' Calculation of energy at the next step:
-    #         Et[q] = (E_initia[q] * (Pop_initial[q] - 2*Pop_lost[q]) + E_gained[q-1]*Pop_gained[q-1] + E_gained[q+1]*Pop_gained[q+1]) / (Pop_tstepped[q])
-    # '''
-    # try:
-    #     energyAtTtstep[0] = (energyAtT0[0]*(populationAtT0[0]-2*deltaPop[1]) + energyAtT0[1]*deltaPop[2])/populationAtTtstep[0]
-    # except ZeroDivisionError:
-    #     energyAtTtstep[0] = energyAtT0[0]
-    # for q in range(1, mySpecies.Z):
-    #     deltaPop = [(mySpecies.r1[q][i] + (2 * (mySpecies.r2[q][i] + mySpecies.r3[q][i])) + mySpecies.r4[q][i])/6 for i in range(0,3)]
-    #     # print(deltaPop)
-    #     try:
-    #         energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-2*deltaPop[1]) + energyAtT0[q+1]*deltaPop[2] + energyAtT0[q-1]*deltaPop[0])/populationAtTtstep[q]
-    #     except ZeroDivisionError:
-    #         energyAtTtstep[q] = energyAtT0[q]
-    # # at q=Z, only gain by q-1 and loss by q
-    # deltaPop = [(mySpecies.r1[mySpecies.Z][i] + (2 * (mySpecies.r2[mySpecies.Z][i] + mySpecies.r3[mySpecies.Z][i])) + mySpecies.r4[mySpecies.Z][i])/6 for i in range(0,3)]
-    # try:
-    #     energyAtTtstep[mySpecies.Z] = (energyAtT0[mySpecies.Z]*(populationAtT0[mySpecies.Z]-2*deltaPop[1]) + energyAtT0[mySpecies.Z-1]*deltaPop[0])/populationAtTtstep[mySpecies.Z]
-    # except ZeroDivisionError:
-    #     energyAtTtstep[mySpecies.Z] = energyAtT0[mySpecies.Z]
 
     return
 
@@ -672,6 +643,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
 
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
+                    print("initial temperatures are %s"%mySpecies.NkT)
+                    print("After the 3 rk steps they are %s"%mySpecies.f22)
                     if mySpecies.initSCITemp != -1:
                         mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
@@ -687,6 +660,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 bestStepSize = min(map(lambda x: x.bestStepSize, species))
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
+                    print("initial temperatures are %s"%mySpecies.NkT)
+                    print("After the 3 rk steps they are %s"%mySpecies.f22)
                     if mySpecies.initSCITemp != -1:
                         mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
