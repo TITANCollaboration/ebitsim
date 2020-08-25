@@ -245,35 +245,9 @@ def calculateIonHeating(mySpecies, Z, spitzerHeatingRates, tstep):
     return retArray
 
 def calculateJ(mySpecies, species, tmpEnergy, Z, spitzerHeatingRates, retJ, Ei, kfactor, weighting, tstep):
-    """ j is analogous to k but for evolving energy instead of population. Energy of a charge state is the product of the
-    individual energy and the population.
-
-    Actually we don't need the k's. We simply calculate through the whole RK using j's. So to start the calculation, we
-    use the initial population. Then we propagate in time to add energy.
-
-    initSCITemp allows us to provide an injection temperature in eV. Using this initial temperature, we instantiate
-    kT as an array of zeros, except for the SCI index (1) which contains initSCITemp. For the first iteraction, we
-    use the number of ions in a given charge state Ni and we propagate the energy of each charge state forward.
-
-    On the next cycle, we see how the populations have changed by the charge interactions, and then we propagate the
-    energy foreward using those results. So obviously the temperature of a charge state won't rise until we see that
-    some ions are in that charge state.
-
-    question: once the charge state distribution no longer contains any SCI, what becomes of that temperature? It
-    should go down, but I'm not seeing a mechanism for how it decreases... i.e. the rate never has a chance to be
-    negative... unless the coulomb logarithm?
-
-    Also, the adaptive timestep is responding to the change in population. I think I will not change this. Cases where
-    the temperature changes very quickly are... high charge state
-
-    -----
-
-    Ok now I'm becoming confused... RK4 algorithm where we calculate the different K's, etc. Is this even needed?
-
-    I think so, but that I will have to reformulate the calculations a little. For Spitzer heating, the RHS is not
-    explicitly a function of the energy of the charge state distribution, but for ion-ion interactions, there seems
-    to be a dependence on relative energy of the charge state distributions. This means I need to be careful in
-    how the RK4 increments are being calculate as they are not the same as the charge state evolution equation.
+    """ 
+    This will be used later for RK4 of the energy balance equation. The J is then analogous to the K's
+    calculated for the RK4 algorithm.
     """
 
     # we iterate through charge states and use this to keep track of deltas
@@ -461,12 +435,14 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
     Here we are returning k's and r's, but it might be easier to just return the r's because the population change can still be
     calulated from this. In addition, rounding errors wouldn't be a problem anymore.
     """
+    # print("\nRunning an RK step... ")
 
     mySpecies.k1, mySpecies.r1 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, mySpecies.r1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
     mySpecies.k2, mySpecies.r2 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, mySpecies.r2, populationAtT0,     mySpecies.k1, 0.5, tstep)
     mySpecies.k3, mySpecies.r3 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, mySpecies.r3, populationAtT0,     mySpecies.k2, 0.5, tstep)
     mySpecies.k4, mySpecies.r4 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, mySpecies.r4, populationAtT0,     mySpecies.k3, 1.0, tstep)
     
+
     # Updates the population of each charge state in the species.
     for qindex in range(0, mySpecies.Z + 1):
         # new energy value     = ( kT(q-1)(pop gained by q-1) - kT(q)(lost by q) + kT(q+1)(gained by q+1) ) / total change in population 
@@ -474,27 +450,42 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
         populationAtTtstep[qindex] = populationAtT0[qindex] + ((1 / 6) * (mySpecies.k1[qindex] + (2 * (mySpecies.k2[qindex] + mySpecies.k3[qindex])) + mySpecies.k4[qindex]) )
 
     # New calculation of time stepped energy
-    # deltaPop = [loss by qi, gain by qi]
+    # deltaPop = [loss by q(i) from EI, gain by q(i) from CX or RR]
     for q in range(0, mySpecies.Z+1):
         deltaPop = [(mySpecies.r1[q][i] + (2 * (mySpecies.r2[q][i] + mySpecies.r3[q][i])) + mySpecies.r4[q][i])/6 for i in range(0,2)]
+        # print("DeltaPop for q=%s"%q+": %s"%deltaPop)
         if q==0:
             try:
-                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-2*deltaPop[0]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
+                #this one is with gain only...
+                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1])
+                #this one is with gain and loss... caused problems
+                # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
             except ZeroDivisionError:
                 energyAtTtstep[q] = energyAtT0[q]
         elif q==mySpecies.Z:
             lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
             try:
-                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-2*deltaPop[0]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtTtstep[q])
+                #gain only
+                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
+                # gain and loss
+                # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtTtstep[q])
             except ZeroDivisionError:
                 energyAtTtstep[q] = energyAtT0[q]
         else:
             lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
+            # print("lowerQ: %s"%lowerQ)
             try:
-                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-2*deltaPop[0]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
+                #gain
+                # print("energyAtT0[q-1] = %s"%energyAtT0[q-1] + ", lowerQ[0] = %s"%lowerQ[0]+", populationAtT0[q]=%s"%populationAtT0[q]+", deltaPop[1]=%s"%deltaPop[1])
+                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
+                #gain and loss
+                # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
             except ZeroDivisionError:
                 energyAtTtstep[q] = energyAtT0[q]
 
+    
+    # print("Initial pop: %s"%populationAtT0 + ",\nfinal pop:   %s"%populationAtTtstep)
+    # print("Initial temp: %s"%energyAtT0 + ",\nfinal temp:   %s"%energyAtTtstep)
     return
 
 def rkStepEnergy(ebitParams, mySpecies, species, tstep, energyAtT0):
@@ -612,10 +603,13 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # Therfore y22 is a more accurate estimation at t0 + 2*tstep than y1.
 
                 # start = time.time()
+                # print("Starting first RK step!")
                 #                                                   initial population,   extrap. pop,  initial energy, extrap. energy
                 rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 , mySpecies.NkT, mySpecies.f1)
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12, mySpecies.NkT, mySpecies.f12)
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22, mySpecies.f12, mySpecies.f22)
+
+                # print("Finished with last RK step!\n")
 
 
                 # end = time.time()
@@ -643,8 +637,11 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
 
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
-                    print("initial temperatures are %s"%mySpecies.NkT)
-                    print("After the 3 rk steps they are %s"%mySpecies.f22)
+                    # print("initial temperatur is %s"%mySpecies.NkT)
+                    # print("initial population is %s"%mySpecies.population)
+                    # print("final   temperatur is %s"%mySpecies.f22)
+                    # print("final   population is %s"%mySpecies.y22)
+                    # print("\n")
                     if mySpecies.initSCITemp != -1:
                         mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
@@ -660,8 +657,11 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 bestStepSize = min(map(lambda x: x.bestStepSize, species))
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
-                    print("initial temperatures are %s"%mySpecies.NkT)
-                    print("After the 3 rk steps they are %s"%mySpecies.f22)
+                    # print("initial temperatur is %s"%mySpecies.NkT)
+                    # print("initial population is %s"%mySpecies.population)
+                    # print("final   temperatur is %s"%mySpecies.f22)
+                    # print("final   population is %s"%mySpecies.y22)
+                    # print("\n")
                     if mySpecies.initSCITemp != -1:
                         mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
