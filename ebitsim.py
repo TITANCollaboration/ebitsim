@@ -15,6 +15,8 @@ from ebitsim_docs import *
 from ebitChargeDistribution import probeFnAddPop
 from geant4MacroOutput import geant4MacroOutput
 from commonUtils import getElementAbv, column
+__ECHG__ = 1.6e-19  # "Electron charge"
+__TORR__ = 3.537e16  # "1 torr in cm-3"
 
 import platform
 import sys
@@ -143,6 +145,8 @@ def writeCSVFile(species, ebitParams, outputConfig):
 
 def writeRates(species, ebitParams, outputConfig):
     # An option to write out the rate matricies for diagnostic purposes.
+    """ Added some sloppy factors to get the actual cross sections. This could be more robust in the future
+    """
 
     with open(outputConfig.outputFileName, 'w', newline='') as ratesfile:
         csvwriter = csv.writer(ratesfile, delimiter=',', quoting=csv.QUOTE_NONE)
@@ -151,18 +155,18 @@ def writeRates(species, ebitParams, outputConfig):
         csvwriter.writerow(['Breeding time: %s' % ebitParams[0].breedingTime])
         csvwriter.writerow(['Beam energy: %s' % ebitParams[0].beamEnergy])
 
-        for myspecies in species:
+        for idx, myspecies in enumerate(species):
             csvwriter.writerow(['Species = %s' % getElementAbv(myspecies.Z)])
             csvwriter.writerow(['ionization rates for q=0 to %s:' % str(len(myspecies.ionizationRates)-1)])
-            for i, j in enumerate(myspecies.ionizationRates):
+            for i, j in enumerate([k*__ECHG__/ebitParams[idx].currentDensity for k in myspecies.ionizationRates]):
                 csvwriter.writerow(['q = %s' %i] + [j])
 
             csvwriter.writerow(['radiative recombination rates:'])
-            for i, j in enumerate(myspecies.rrRates):
+            for i, j in enumerate([k*__ECHG__/ebitParams[idx].currentDensity for k in myspecies.rrRates]):
                 csvwriter.writerow(['q = %s' %i] + [j])
 
             csvwriter.writerow(['charge exchange rates:'])
-            for i, j in enumerate(myspecies.chargeExchangeRates):
+            for i, j in enumerate([k/(ebitParams[idx].pressure*__TORR__) for k in myspecies.chargeExchangeRates]):
                 csvwriter.writerow(['q = %s' %i] + [j])
 
         csvwriter.writerow(['END'])
