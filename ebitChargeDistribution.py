@@ -183,17 +183,19 @@ def createChargeExchangeRates(Z, A, pressure, ionTemperature):
 def createChargeExchangeRates_MS(Z, A, pressure, ionTemperature):
     """ An implementation using the work of Salzborn and Mueller from 1977 paper.
     """
+    print("creating CX rates for ion temperature of %s"%ionTemperature)
 
     chargeExchangeRates = [0] * (Z + 1)
 
     h2Density = pressure * __TORR__
-    ionMassInAMU = A*__AMU__
+    
 
     # Epgas is the ionization potential of the background gas. Make this adjustable?
 
+    # The full cross section includes qi^alphak, but this is added in the loop below.
     sigV = __SALZBORNAK__*__Epgas__**__SALZBORNBETAK__
     for i in range(1, Z+1):
-        chargeExchangeRates[i] =h2Density*sigV*i**__SALZBORNALPHAK__
+        chargeExchangeRates[i] = h2Density*sigV*i**__SALZBORNALPHAK__
     return chargeExchangeRates
 
 
@@ -229,6 +231,7 @@ def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecF
     if runChargeExchange == 0:
         myFuncValues = createInteractionRates(mySpecies.Z, myEbitParams.beamEnergy, myEbitParams.currentDensity, crossSecFunc(myEbitParams.beamEnergy, mySpecies.Z))
     else:
+
         myFuncValues = crossSecFunc(mySpecies.Z, mySpecies.A, ebitParams[0].pressure, ebitParams[0].ionTemperature)
 
     # Reorganizes output for return
@@ -276,6 +279,10 @@ def calculateJ(mySpecies, species, tmpEnergy, Z, spitzerHeatingRates, retJ, Ei, 
 def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates, retK, p1, p2, addWFactor, tstep):
     # k's are the increments used in the Runge Kutta 4 iterative method
 
+    ionMassIneV = mySpecies.A*__AMU__
+
+    
+
     # Lengths here are Z+1 because we have a neutral charge state to account for.
     mySpecies.betaDecayDelta = [0.0]*(Z+1)
     nonDecayLastDelta = 0.0
@@ -296,10 +303,11 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
 
+        avgIonV = __C__*sqrt(8.0*mySpecies.NkT/(pi*ionMassIneV))
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
-                                 + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (avgIonV*chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
                                  + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
@@ -695,6 +703,9 @@ def calcEnergyRates(mySpecies, myEbitParams, ebitParams):
 
 def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
     print("Calculating rate matrices...")
+    """ These here are what I would call the "static" portion of the rates. They are calculated before the time stepping occurs because
+    the information they hold is not dynamic.
+    """
     # myEbitParams.currentDensity   = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
     # removed above to calculate it during the class instantiation
     mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )

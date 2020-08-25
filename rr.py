@@ -93,6 +93,9 @@ def createGG(n, kappa, g0, gg):
     return gg
 
 def rrCrossSection(eKinetic, q, Z, gg=createGGArray(), g0=g0()):
+    """ This looks to be a time reversed photoionization. So we determine the photonionization cross section and
+    then multiply by some factor ahead to get the reversed cross section for RR.
+    """
     ry = 13.605698
     alpha = 1 / 137.036
     a0 = 5.29177249e-9
