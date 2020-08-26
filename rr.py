@@ -3,6 +3,8 @@
 from math import *
 # These are set to the values they are because that is how the lisp
 # code I translated this from did it...
+# Calculation of radiative recombination according to
+# R. Becker, O. Brinzanescu, and Th. Stöhlker, AIP conference proceedings 572 (2001)119
 __GSIZE__ = 101
 __NMAX__ = 30
 
@@ -96,8 +98,11 @@ def rrCrossSection(eKinetic, q, Z, gg=createGGArray(), g0=g0()):
     """ This looks to be a time reversed photoionization. So we determine the photonionization cross section and
     then multiply by some factor ahead to get the reversed cross section for RR.
     """
-    ry = 13.605698
+    #  Rydberg-Energy Ry= h*c*R_inf, R_inf is the well known Rydberg constant
+    ry = 13.605698 
+    #  Fine structure constant
     alpha = 1 / 137.036
+    #  Bohr radius in cm
     a0 = 5.29177249e-9
     const = (4 * pi * alpha * (a0 ** 2)) / 3
     k = sqrt(eKinetic / ry)
