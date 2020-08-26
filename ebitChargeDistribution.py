@@ -279,7 +279,6 @@ def calculateJ(mySpecies, species, tmpEnergy, Z, spitzerHeatingRates, retJ, Ei, 
 def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates, retK, p1, p2, addWFactor, tstep):
     # k's are the increments used in the Runge Kutta 4 iterative method
 
-    ionMassIneV = mySpecies.A*__AMU__
 
     
 
@@ -303,11 +302,10 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
 
-        avgIonV = __C__*sqrt(8.0*mySpecies.NkT/(pi*ionMassIneV))
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
-                                 + (avgIonV*chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
                                  + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
@@ -352,6 +350,7 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
     A new function from calculateK() so that we can allow heat transfer which occurs which changing charge state populations.
     """
 
+    ionMassIneV = mySpecies.A*__AMU__
     # Lengths here are Z+1 because we have a neutral charge state to account for.
     mySpecies.betaDecayDelta = [0.0]*(Z+1)
     nonDecayLastDelta = 0.0
@@ -370,17 +369,18 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
 
+        avgIonV = __C__*sqrt(8.0*mySpecies.NkT[zindex]/(pi*ionMassIneV))
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
-                                 + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (avgIonV*chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
                                  + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
+
             # changed from mySpecies.tmpPop to tmpPop... shouldn't have any adverse effects.
             mySpecies.betaDecayDelta[zindex] = tmpPop[zindex]*mySpecies.decayConstant*tstep
             # mySpecies.betaDecayDelta[zindex] = betaDecay1(mySpecies, species, ebitParams, zindex, tstep)
-
 
         # charge changing reactions
         retK[zindex] = (nonDecayDelta - nonDecayLastDelta)
