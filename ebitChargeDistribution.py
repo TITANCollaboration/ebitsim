@@ -20,6 +20,7 @@ __kB__ = 1.381e-23  # "Boltzmann constant"
 __Epgas__ = 7.0 # first ionization potential of H2 gas in eV (was 15.42593 eV, Oliver says 7 is correct)
 
 
+#Random comment
 
 
 # Charge exchange constants
