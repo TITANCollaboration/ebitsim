@@ -17,7 +17,7 @@ __ALPHA__ = 7.2974e-3  # "fine-structure constant"
 __CHEXCONST__ = 2.25e-16  # "Constant for use in charge-exchange "
 __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
 __kB__ = 1.381e-23  # "Boltzmann constant"
-__Epgas__ = 15.42593 # first ionization potential of H2 gas in eV (Oliver says 7 eV is better)
+__Epgas__ = 7.0 # first ionization potential of H2 gas in eV (was 15.42593 eV, Oliver says 7 is correct)
 
 
 
@@ -148,7 +148,7 @@ def createEmptyList(sizeOfArray):
     return myEmptyList
 
 def createEmptyListOfList(sizeOfArray):
-    val = [[0.0, 0.0, 0.0] for i in range(sizeOfArray)]
+    val = [[0.0, 0.0] for i in range(sizeOfArray)]
     return val
 
 
@@ -183,7 +183,6 @@ def createChargeExchangeRates(Z, A, pressure, ionTemperature):
 def createChargeExchangeRates_MS(Z, A, pressure, ionTemperature):
     """ An implementation using the work of Salzborn and Mueller from 1977 paper.
     """
-    print("creating CX rates for ion temperature of %s"%ionTemperature)
 
     chargeExchangeRates = [0] * (Z + 1)
 
@@ -368,7 +367,6 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
         # dNi = dt * ( Rei(i-1) - Rei(i) + Rrr(i+1) - Rrr(i) + Rcx(i+1) - Rcx(i) )
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
-
         avgIonV = __C__*sqrt(8.0*mySpecies.NkT[zindex]/(pi*ionMassIneV))
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
@@ -391,30 +389,15 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
     retK[Z] = (-nonDecayLastDelta)
 
     # A new attempt for populating retR. Trying to reduce occurance of rounding errors blowing up.
+    # It is on purpose that this only indexes up to Z-1
     for qindex in range(0,Z):
         # retR = [ amount lost by ionization of q(i),
         #          amount gained by RR and CX of q(i+1)]
         retR[qindex] = [ tstep*ionizationRates[qindex]*tmpPop[qindex], 
                          tstep*(chargeExchangeRates[qindex+1]+rrRates[qindex+1])*tmpPop[qindex+1]]
 
-    # This portion is for keeping track of the heat transfer due to the charge changing reactions.
-    # for qindex in range(1, Z):
-    #     # get the individual rates for q-1, q, and q+1
-    #     retR[qindex] = [ tstep*(ionizationRates[qindex-1]*tmpPop[qindex-1]),
-    #                      tstep*(chargeExchangeRates[qindex]+rrRates[qindex]+ionizationRates[qindex])*tmpPop[qindex],
-    #                      tstep*(rrRates[qindex+1]+chargeExchangeRates[qindex+1])*tmpPop[qindex+1] ]
-    # retR[0] = [0.0,
-    #            tstep*(rrRates[0]+chargeExchangeRates[0]+ionizationRates[0])*tmpPop[0],
-    #            tstep*(rrRates[1]+chargeExchangeRates[1])*tmpPop[1] ]
-    # retR[Z] = [tstep*(ionizationRates[Z-1]*tmpPop[Z-1]),
-    #            tstep*(rrRates[Z-1]+chargeExchangeRates[Z-1]+ionizationRates[Z-1])*tmpPop[Z-1],
-    #            0.0 ]
 
-    # print("\nChecking that the retK rates == r rates")
-    # for qindex in range(1,Z):
-    #     print('does %s'%retK[qindex]+' == %s ??'%sum(r[qindex]) )
 
-    # should this be tmpPop instead of mySpecies.tmpPop?
     mySpecies.betaDecayDelta[Z] = tmpPop[Z]*mySpecies.decayConstant*tstep
 
     # The portion deals with cross-species rates of beta decay. Determines if neighboring species affect each other.
@@ -429,10 +412,6 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
     else:
         # else we just do the regular and subtract the beta decay rate.
         retK = [x[0]-x[1] for x in zip(retK, mySpecies.betaDecayDelta)]
-
-    # This will not work because the next species will not see it. Also, I don't have a conditional in here for checking
-    # that the next species is neighboring in Z. The solution is to make this rate a parameter of the class. The best thing
-    # about such a solution is that we dont need betaDecayLastDelta... just look at the previous species.
 
     return retK, retR
 
@@ -450,6 +429,11 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
     mySpecies.k3, mySpecies.r3 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, mySpecies.r3, populationAtT0,     mySpecies.k2, 0.5, tstep)
     mySpecies.k4, mySpecies.r4 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, mySpecies.r4, populationAtT0,     mySpecies.k3, 1.0, tstep)
     
+    # print("k values for q=1:")
+    # print("k1 %s"%mySpecies.k1[1])
+    # print("k2 %s"%mySpecies.k2[1])
+    # print("k3 %s"%mySpecies.k3[1])
+    # print("k4 %s"%mySpecies.k4[1])
 
     # Updates the population of each charge state in the species.
     for qindex in range(0, mySpecies.Z + 1):
@@ -505,38 +489,6 @@ def rkStepEnergy(ebitParams, mySpecies, species, tstep, energyAtT0):
         Heat given by q(i+1)
         Heat lost by q(i)
     """
-    energyAtTtStep = [0.0 for i in range(len(energyAtT0))]
-
-    # calculateJ is for ion-ion interactions which need an RK step.
-    #              calculateJ(mySpecies, species,           tmpEnergy,           Z,           spitzerHeatingRates, retJ,         Ei,       kfactor, weighting, tstep)
-    # mySpecies.j1 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0, mpSpecies.tmpEnergy, 0.0, tstep)
-    # mySpecies.j2 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0,        mySpecies.j1, 0.5, tstep)
-    # mySpecies.j3 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0,        mySpecies.j2, 0.5, tstep)
-    # mySpecies.j4 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0,        mySpecies.j3, 1.0, tstep)
-
-
-    print("/nrkStepEnergy called! Checking equality of rates")
-    for q in range(0,mySpecies.Z+1):
-        print('does %s'%mySpecies.k4[q]+' == %s ??'%sum(mySpecies.r4[q]) )
-
-    # Updates the energy of each charge state in the species.
-    for qindex in range(0, mySpecies.Z + 1):
-        # the calculation here must be gain/loss = energy of state * (change in population/ total population)
-
-        # heat gained from charge state q-1
-        gain1 = (mySpecies.NkT[qindex-1]/6)*(mySpecies.r1[qindex][0]+2*(mySpecies.r2[qindex][0]+mySpecies.r3[qindex][0])+mySpecies.r4[qindex][0])
-        # heat gained from charge state q+1
-        gain2 = (mySpecies.NkT[qindex+1]/6)*(mySpecies.r1[qindex][2]+2*(mySpecies.r2[qindex][2]+mySpecies.r3[qindex][2])+mySpecies.r4[qindex][2])
-
-        # heat lost from charge state q
-        losses = (mySpecies.NkT[qindex]/6)*(mySpecies.r1[qindex][1]+2*(mySpecies.r2[qindex][1]+mySpecies.r3[qindex][1])+mySpecies.r4[qindex][1])
-
-        # print("gain from q-1: %s"%str(gain4))
-        try:
-            energyAtTtStep[qindex] = energyAtT0[qindex] + ((gain1 + gain2 + losses)/mySpecies.y22[qindex])
-        except ZeroDivisionError:
-            energyAtTtStep[qindex] = 0.0
-
     return 
 
 
@@ -611,13 +563,14 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # Therfore y22 is a more accurate estimation at t0 + 2*tstep than y1.
 
                 # start = time.time()
-                # print("Starting first RK step!")
+                # print("\n-----------------Starting first RK step-----------------")
                 #                                                   initial population,   extrap. pop,  initial energy, extrap. energy
                 rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 , mySpecies.NkT, mySpecies.f1)
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12, mySpecies.NkT, mySpecies.f12)
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22, mySpecies.f12, mySpecies.f22)
 
-                # print("Finished with last RK step!\n")
+
+                # print("-----------------Finished with last RK step--------------\n")
 
 
                 # end = time.time()
@@ -635,9 +588,12 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
             # If ANY of the diff's are >0, then we perform the bestStepSize calculation
             if any(i>0 for i in map(lambda x: x.diff, species)):
                 # If y22 != y1, we determine the best step size.
+                # print("wasn't the perfect step size... adjusting bestStepSize")
                 for mySpecies in species:
+                    # print("original step size: %s"%mySpecies.bestStepSize)
                     if mySpecies.diff != 0:
                         mySpecies.bestStepSize = step * ((ebitParams[0].rkParams.desiredAccuracy / mySpecies.diff) ** 0.2)
+                        # print("new step size: %s"%mySpecies.bestStepSize)
             else:
                 # If y1 == y22 for all species (unlikely), then we chose the perfect step size.
                 # we commit y22 and continue to the next step
@@ -658,7 +614,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # Continue means we start again at the beginning of the species loop!
                 continue
 
-            # If we get here, the first if statement was entered and bestStepSize has been adjusted.
+            # If we get here, the first if statement (line 584) was entered and bestStepSize has been adjusted.
             # If ALL of the bestStepSizes are greater than step, we commit y22, increment time, and adjust step
             if all(i >= step for i in map(lambda x: x.bestStepSize, species)):
                 t += 2*step
@@ -670,6 +626,9 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                     # print("final   temperatur is %s"%mySpecies.f22)
                     # print("final   population is %s"%mySpecies.y22)
                     # print("\n")
+                    # if min(mySpecies.f22) < 0.0:
+                    #     print("min of mySpecies.f22 is %s"%min(mySpecies.f22)+", at q is %s"%mySpecies.f22.index(min(mySpecies.f22)))
+                    #     sys.exit("Energy became negative... ")
                     if mySpecies.initSCITemp != -1:
                         mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
@@ -677,6 +636,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # If we get here, one of the mySpecies.bestStepSize values is smaller than step
                 # and we need to re-perform this time loop with an adjusted step value.
                 # We do NOT increment the time
+                # print("Step rejected, it was too small...")
                 bestStepSize = min(map(lambda x: x.bestStepSize, species))
                 mySpecies.noTooBigSteps += 1
 
