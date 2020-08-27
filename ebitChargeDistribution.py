@@ -367,7 +367,7 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
         # dNi = dt * ( Rei(i-1) - Rei(i) + Rrr(i+1) - Rrr(i) + Rcx(i+1) - Rcx(i) )
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
-        avgIonV = __C__*sqrt(8.0*mySpecies.NkT[zindex]/(pi*ionMassIneV))
+        avgIonV = __C__*sqrt(8.0*ebitParams.ionTemperature/(pi*ionMassIneV))
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
@@ -416,7 +416,7 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
     return retK, retR
 
 
-def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTtstep, energyAtT0, energyAtTtstep):
+def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTtstep):
     # longer function param calls yes but it speeds it up calculateK by 10%...
     """
     Here we are returning k's and r's, but it might be easier to just return the r's because the population change can still be
@@ -424,11 +424,17 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
     """
     # print("\nRunning an RK step... ")
 
-    mySpecies.k1, mySpecies.r1 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, mySpecies.r1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
-    mySpecies.k2, mySpecies.r2 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, mySpecies.r2, populationAtT0,     mySpecies.k1, 0.5, tstep)
-    mySpecies.k3, mySpecies.r3 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, mySpecies.r3, populationAtT0,     mySpecies.k2, 0.5, tstep)
-    mySpecies.k4, mySpecies.r4 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, mySpecies.r4, populationAtT0,     mySpecies.k3, 1.0, tstep)
+    # mySpecies.k1, mySpecies.r1 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, mySpecies.r1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
+    # mySpecies.k2, mySpecies.r2 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, mySpecies.r2, populationAtT0,     mySpecies.k1, 0.5, tstep)
+    # mySpecies.k3, mySpecies.r3 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, mySpecies.r3, populationAtT0,     mySpecies.k2, 0.5, tstep)
+    # mySpecies.k4, mySpecies.r4 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, mySpecies.r4, populationAtT0,     mySpecies.k3, 1.0, tstep)
     
+    mySpecies.k1 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
+    mySpecies.k2 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, populationAtT0,     mySpecies.k1, 0.5, tstep)
+    mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0,     mySpecies.k2, 0.5, tstep)
+    mySpecies.k4 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, populationAtT0,     mySpecies.k3, 1.0, tstep)
+    
+
     # print("k values for q=1:")
     # print("k1 %s"%mySpecies.k1[1])
     # print("k2 %s"%mySpecies.k2[1])
@@ -443,37 +449,37 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
 
     # New calculation of time stepped energy
     # deltaPop = [loss by q(i) from EI, gain by q(i) from CX or RR]
-    for q in range(0, mySpecies.Z+1):
-        deltaPop = [(mySpecies.r1[q][i] + (2 * (mySpecies.r2[q][i] + mySpecies.r3[q][i])) + mySpecies.r4[q][i])/6 for i in range(0,2)]
-        # print("DeltaPop for q=%s"%q+": %s"%deltaPop)
-        if q==0:
-            try:
-                #this one is with gain only...
-                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1])
-                #this one is with gain and loss... caused problems
-                # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
-            except ZeroDivisionError:
-                energyAtTtstep[q] = energyAtT0[q]
-        elif q==mySpecies.Z:
-            lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
-            try:
-                #gain only
-                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
-                # gain and loss
-                # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtTtstep[q])
-            except ZeroDivisionError:
-                energyAtTtstep[q] = energyAtT0[q]
-        else:
-            lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
-            # print("lowerQ: %s"%lowerQ)
-            try:
-                #gain
-                # print("energyAtT0[q-1] = %s"%energyAtT0[q-1] + ", lowerQ[0] = %s"%lowerQ[0]+", populationAtT0[q]=%s"%populationAtT0[q]+", deltaPop[1]=%s"%deltaPop[1])
-                energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
-                #gain and loss
-                # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
-            except ZeroDivisionError:
-                energyAtTtstep[q] = energyAtT0[q]
+    # for q in range(0, mySpecies.Z+1):
+    #     deltaPop = [(mySpecies.r1[q][i] + (2 * (mySpecies.r2[q][i] + mySpecies.r3[q][i])) + mySpecies.r4[q][i])/6 for i in range(0,2)]
+    #     # print("DeltaPop for q=%s"%q+": %s"%deltaPop)
+    #     if q==0:
+    #         try:
+    #             #this one is with gain only...
+    #             energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1])
+    #             #this one is with gain and loss... caused problems
+    #             # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
+    #         except ZeroDivisionError:
+    #             energyAtTtstep[q] = energyAtT0[q]
+    #     elif q==mySpecies.Z:
+    #         lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
+    #         try:
+    #             #gain only
+    #             energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
+    #             # gain and loss
+    #             # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtTtstep[q])
+    #         except ZeroDivisionError:
+    #             energyAtTtstep[q] = energyAtT0[q]
+    #     else:
+    #         lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
+    #         # print("lowerQ: %s"%lowerQ)
+    #         try:
+    #             #gain
+    #             # print("energyAtT0[q-1] = %s"%energyAtT0[q-1] + ", lowerQ[0] = %s"%lowerQ[0]+", populationAtT0[q]=%s"%populationAtT0[q]+", deltaPop[1]=%s"%deltaPop[1])
+    #             energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
+    #             #gain and loss
+    #             # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
+    #         except ZeroDivisionError:
+    #             energyAtTtstep[q] = energyAtT0[q]
 
     
     # print("Initial pop: %s"%populationAtT0 + ",\nfinal pop:   %s"%populationAtTtstep)
@@ -550,6 +556,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 mySpecies.NkT[1] = mySpecies.initSCITemp
 
         # Enter rk stepping loop
+        print("Entering RK stepping loop...")
+
         while t <= timeToBreed:
 
             # Compute population change for all species in the EBIT.
@@ -565,10 +573,13 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # start = time.time()
                 # print("\n-----------------Starting first RK step-----------------")
                 #                                                   initial population,   extrap. pop,  initial energy, extrap. energy
-                rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 , mySpecies.NkT, mySpecies.f1)
-                rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12, mySpecies.NkT, mySpecies.f12)
-                rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22, mySpecies.f12, mySpecies.f22)
+                rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 )
+                rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12)
+                rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22)
 
+                # rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 , mySpecies.NkT, mySpecies.f1)
+                # rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12, mySpecies.NkT, mySpecies.f12)
+                # rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22, mySpecies.f12, mySpecies.f22)
 
                 # print("-----------------Finished with last RK step--------------\n")
 
@@ -606,8 +617,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                     # print("final   temperatur is %s"%mySpecies.f22)
                     # print("final   population is %s"%mySpecies.y22)
                     # print("\n")
-                    if mySpecies.initSCITemp != -1:
-                        mySpecies.NkT = copy.copy(mySpecies.f22)
+                    # if mySpecies.initSCITemp != -1:
+                    #     mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
                     
 
@@ -629,8 +640,8 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                     # if min(mySpecies.f22) < 0.0:
                     #     print("min of mySpecies.f22 is %s"%min(mySpecies.f22)+", at q is %s"%mySpecies.f22.index(min(mySpecies.f22)))
                     #     sys.exit("Energy became negative... ")
-                    if mySpecies.initSCITemp != -1:
-                        mySpecies.NkT = copy.copy(mySpecies.f22)
+                    # if mySpecies.initSCITemp != -1:
+                    #     mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
             else:
                 # If we get here, one of the mySpecies.bestStepSize values is smaller than step
