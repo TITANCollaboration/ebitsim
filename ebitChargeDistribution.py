@@ -23,7 +23,7 @@ __Epgas__ = 7.0 # first ionization potential of H2 gas in eV (was 15.42593 eV, O
 #Random comment
 
 
-# Charge exchange constants
+# Charge exchange constants (for q --> q-1)
 __SALZBORNAK__ = 1.43E-12 # "Constants from Mueller & Salzborn, Sept 1977"
 __SALZBORNALPHAK__ = 1.17
 __SALZBORNBETAK__ = 2.76
@@ -368,11 +368,12 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
         # dNi = dt * ( Rei(i-1) - Rei(i) + Rrr(i+1) - Rrr(i) + Rcx(i+1) - Rcx(i) )
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
-        avgIonV = __C__*sqrt(8.0*mySpecies.NkT[zindex]/(pi*ionMassIneV))
+
+        avgIonV = __C__*sqrt(8.0*ebitParams.ionTemperature/(pi*ionMassIneV))
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
-                                 + (avgIonV*chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
                                  + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
@@ -430,6 +431,11 @@ def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTt
     mySpecies.k3, mySpecies.r3 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, mySpecies.r3, populationAtT0,     mySpecies.k2, 0.5, tstep)
     mySpecies.k4, mySpecies.r4 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, mySpecies.r4, populationAtT0,     mySpecies.k3, 1.0, tstep)
     
+    # mySpecies.k1 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
+    # mySpecies.k2 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, populationAtT0,     mySpecies.k1, 0.5, tstep)
+    # mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0,     mySpecies.k2, 0.5, tstep)
+    # mySpecies.k4 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, populationAtT0,     mySpecies.k3, 1.0, tstep)
+   
     # print("k values for q=1:")
     # print("k1 %s"%mySpecies.k1[1])
     # print("k2 %s"%mySpecies.k2[1])
@@ -571,6 +577,9 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22, mySpecies.f12, mySpecies.f22)
 
 
+                # rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 )
+                # rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12)
+                # rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22)
                 # print("-----------------Finished with last RK step--------------\n")
 
 
@@ -647,6 +656,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
 
             # Probing the population of each species
             if t >= nextPrint:
+                # print("Probing... %s"%t)
                 nextPrint += ebitParams[0].probeEvery
                 # print("noTooBigSteps: %s"%str(mySpecies.noTooBigSteps))
                 for mySpecies in species:
