@@ -66,10 +66,11 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     plt.rcParams['legend.loc'] = 'best'
     plt.figure()
 
+
     for myspecies in species:
         for chargeStateResults in range(0, len(myspecies.results)):
             mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults]) + '+'
-            default_cycler = (cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'r']) + cycler(linestyle=['--', '-', ':', '-.', '--', '-', ':']))
+            default_cycler = (cycler(linestyle=['--', '-', ':', '-.']) * cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'r']))
             plt.rc('lines', linewidth=2)
             plt.rc('grid', color='k', linestyle=':', linewidth=0.5) 
             plt.rc('axes', grid=True, prop_cycle=default_cycler)
@@ -83,6 +84,7 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
                 plt.xscale('log')
 
     plt.ylabel('Population')
+    # plt.xlabel(r'$log(J\tau)$'))
     plt.xlabel('Breeding time (s)')
     beamEnergies = ''
 

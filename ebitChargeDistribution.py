@@ -13,6 +13,7 @@ __ECHG__ = 1.6e-19  # "Electron charge"
 __VBOHR__ = 2.2e8  # "Bohr velocity in cm/s"
 __AMU__ = 9.311e8  # "1 AMU in eV"
 __TORR__ = 3.537e16  # "1 torr in cm-3"
+__blah__ = 24.1521e23
 __ALPHA__ = 7.2974e-3  # "fine-structure constant"
 __CHEXCONST__ = 2.25e-16  # "Constant for use in charge-exchange "
 __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
@@ -26,7 +27,7 @@ __Epgas__ = 7.0 # first ionization potential of H2 gas in eV (was 15.42593 eV, O
 # Charge exchange constants (for q --> q-1)
 __SALZBORNAK__ = 1.43E-12 # "Constants from Mueller & Salzborn, Sept 1977"
 __SALZBORNALPHAK__ = 1.17
-__SALZBORNBETAK__ = 2.76
+__SALZBORNBETAK__ = -2.76
 
 __MAXCHARGE__ = 105
 __MAXSPECIES__ = 1000
@@ -189,6 +190,7 @@ def createChargeExchangeRates_MS(Z, A, pressure, ionTemperature):
 
     h2Density = pressure * __TORR__
     
+    print("Number density of background gas... %s cm^-3"%'{:.2e}'.format(h2Density) )
 
     # Epgas is the ionization potential of the background gas. Make this adjustable?
 
@@ -370,10 +372,11 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
 
         avgIonV = __C__*sqrt(8.0*ebitParams.ionTemperature/(pi*ionMassIneV))
+
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
-                                 + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (avgIonV * chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
                                  + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
@@ -530,11 +533,14 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
         mySpecies.bestStepSize = step
     timeToBreed = 0.0
 
+    # f"{Decimal('40800000000.00000000000000'):.2E}"
+    # '{:.2e}'.format(x)
+
     for myEbitParams in ebitParams:
         print("Simulating using beam energy %s eV" % myEbitParams.beamEnergy)
-        print("Electron velocity %s c"%str(myEbitParams.electronVelocity/__C__))
-        print("Electron number density %s cm^-3"%str(myEbitParams.currentDensity/(myEbitParams.electronVelocity*__ECHG__)) )
-        print("Current density %s A/cm^2"%str(myEbitParams.currentDensity))
+        print("Electron velocity ... %s c"%str(myEbitParams.electronVelocity/__C__))
+        print("Electron number density ... %s cm^-3"%'{:.2e}'.format(myEbitParams.currentDensity/(myEbitParams.electronVelocity*__ECHG__)) )
+        print("Current density ... %s A/cm^2"%'{:.2e}'.format(myEbitParams.currentDensity))
 
         print("Tracking species Z = %s" % ', '.join(map(lambda x: str(x.Z), species) ) )
         if myEbitParams.ignoreBetaDecay == 0:
