@@ -107,9 +107,6 @@ class Species:
 
 class RkStepParams:
     def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-7, desiredAccuracy=0):
-        # Is this a bad thing to have the initial time step at 1e-6?
-        # Threshold breeding on Ne20, for 1+ to 2+ requires time scales of 1e-5 about. But clearly
-        # the adaptive algorithm is working and minimizing this right away...
         self.minCharge = minCharge
         self.tStep = tStep
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
@@ -502,7 +499,7 @@ def rkStepEnergy(ebitParams, mySpecies, species, tstep, energyAtT0):
     return 
 
 
-def probeFnAddPop(time, ebitParams, mySpecies):
+def probeFnAddPop(time, ebitParams, mySpecies, tstep):
     #  In the original lisp code this function was passed along to calcChargePopulations
     #  so for now I will do the same as apparently this is something someone might want
     #  to change to a different function... If someone knows the reason for this please
@@ -510,7 +507,7 @@ def probeFnAddPop(time, ebitParams, mySpecies):
     for chargeIndex in range(0, len(mySpecies.chargeStates)):
         if len(mySpecies.results) < len(mySpecies.chargeStates):
             mySpecies.results.append([]) # Pre-allocate the size of .results
-        mySpecies.results[chargeIndex].append([time, mySpecies.population[mySpecies.chargeStates[chargeIndex]], mySpecies.NkT[mySpecies.chargeStates[chargeIndex]]])
+        mySpecies.results[chargeIndex].append([time, mySpecies.population[mySpecies.chargeStates[chargeIndex]], mySpecies.NkT[mySpecies.chargeStates[chargeIndex]], tstep, mySpecies.stepCounter])
 
 
 
@@ -611,6 +608,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                         mySpecies.bestStepSize = step * ((ebitParams[0].rkParams.desiredAccuracy / mySpecies.diff) ** 0.2)
                         # print("new step size: %s"%mySpecies.bestStepSize)
             else:
+                # We pretty much never enter this condition
                 # If y1 == y22 for all species (unlikely), then we chose the perfect step size.
                 # we commit y22 and continue to the next step
                 t += 2*step
@@ -624,13 +622,14 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                     # print("\n")
                     if mySpecies.initSCITemp != -1:
                         mySpecies.NkT = copy.copy(mySpecies.f22)
+                    # print(min([k for k in [abs(i-j) for i,j in zip(mySpecies.y22,mySpecies.population)] if k!=0.0] ))
                     mySpecies.population = copy.copy(mySpecies.y22)
                     
 
                 # Continue means we start again at the beginning of the species loop!
                 continue
 
-            # If we get here, the first if statement (line 584) was entered and bestStepSize has been adjusted.
+            # If we get here, the first if statement was entered and bestStepSize has been adjusted.
             # If ALL of the bestStepSizes are greater than step, we commit y22, increment time, and adjust step
             if all(i >= step for i in map(lambda x: x.bestStepSize, species)):
                 t += 2*step
@@ -647,6 +646,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                     #     sys.exit("Energy became negative... ")
                     if mySpecies.initSCITemp != -1:
                         mySpecies.NkT = copy.copy(mySpecies.f22)
+                    # print(min([k for k in [abs(i-j) for i,j in zip(mySpecies.y22,mySpecies.population)] if k!=0.0]) )
                     mySpecies.population = copy.copy(mySpecies.y22)
             else:
                 # If we get here, one of the mySpecies.bestStepSize values is smaller than step
@@ -666,7 +666,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 nextPrint += ebitParams[0].probeEvery
                 # print("noTooBigSteps: %s"%str(mySpecies.noTooBigSteps))
                 for mySpecies in species:
-                    probeFnAddPop(t, ebitParams[0], mySpecies)
+                    probeFnAddPop(t, ebitParams[0], mySpecies, step)
         # print("Final step size: %s"%str(step))
 
     return

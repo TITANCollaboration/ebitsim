@@ -129,6 +129,20 @@ def plotSpeciesEnergies(species, ebitParams, outputConfig):
     plt.savefig(outputConfig.outputFileName.split(".")[0]+"_energy.png", dpi=300)
     return
 
+def plotStepsVsIteration(species, outputConfig):
+    import matplotlib
+    import matplotlib.pyplot as plt
+    
+
+    plt.figure()
+    plt.plot(column(species[0].results[0], 4), column(species[0].results[0], 3))
+    plt.ylabel("size of time step used [s]")
+    plt.xlabel("iteration number")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.savefig(outputConfig.outputFileName.split(".")[0]+"_stepSize.png", dpi=300)
+    return
+
 
 def writeCSVFile(species, ebitParams, outputConfig):
     newentry = []
@@ -194,6 +208,8 @@ def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
     if outputConfig.outputType == 'matplotlib':
         print("Writing charge state graph to : %s" % outputConfig.outputFileName)
         plotSpeciesResults(species, ebitParams, outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
+        print("Writing step size graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_stepSize.png"))
+        plotStepsVsIteration(species, outputConfig)
         if species[0].initSCITemp != None: # if including energy dynamics, plot that too
             print("Writing energy graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_energy.png"))
             plotSpeciesEnergies(species, ebitParams, outputConfig)
