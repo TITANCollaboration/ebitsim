@@ -135,9 +135,9 @@ def plotStepsVsIteration(species, outputConfig):
     
 
     plt.figure()
-    plt.plot(column(species[0].results[0], 4), column(species[0].results[0], 3))
+    plt.plot(column(species[0].results[0], 0), column(species[0].results[0], 3))
     plt.ylabel("size of time step used [s]")
-    plt.xlabel("iteration number")
+    plt.xlabel("time [s]")
     plt.xscale("log")
     plt.yscale("log")
     plt.savefig(outputConfig.outputFileName.split(".")[0]+"_stepSize.png", dpi=300)

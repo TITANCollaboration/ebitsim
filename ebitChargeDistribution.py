@@ -106,7 +106,7 @@ class Species:
 
 
 class RkStepParams:
-    def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-7, desiredAccuracy=0):
+    def __init__(self, minCharge=5e-5, tStep=1e-4, desiredAccuracyPerChargeState=1e-7, desiredAccuracy=0):
         self.minCharge = minCharge
         self.tStep = tStep
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
@@ -368,12 +368,12 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
 
-        avgIonV = __C__*sqrt(8.0*ebitParams.ionTemperature/(pi*ionMassIneV))
+        avgIonV = __C__*sqrt(8.0*mySpecies.NkT[zindex]/(pi*ionMassIneV))
 
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
-                                 + (avgIonV * chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] * avgIonV )
                                  + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
         if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
