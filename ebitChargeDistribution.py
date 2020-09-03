@@ -106,7 +106,7 @@ class Species:
 
 
 class RkStepParams:
-    def __init__(self, minCharge=5e-5, tStep=1e-4, desiredAccuracyPerChargeState=1e-7, desiredAccuracy=0):
+    def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-11, desiredAccuracy=0):
         self.minCharge = minCharge
         self.tStep = tStep
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
