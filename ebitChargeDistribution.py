@@ -122,6 +122,7 @@ class EbitParams:
                  beamRadius=200.0e-4,
                  pressure=1e-12,
                  ionTemperature=100.0,
+                 toggleChargeExchange=1,
                  electronVelocity=0.0,
                  ignoreBetaDecay=1,
                  currentDensity=0.0,
@@ -135,11 +136,13 @@ class EbitParams:
         self.beamRadius = beamRadius # cm^2
         self.pressure = pressure # Torr
         self.ionTemperature = ionTemperature # will get rid of
+        self.toggleChargeExchange = toggleChargeExchange
         self.electronVelocity = __C__*sqrt(1-(beamEnergy/__EMASS__+1)**-2) # cm/s
         self.currentDensity = beamCurrent / (pi*beamRadius**2) # A/cm^2
         self.rkParams = rkParams
         self.decayConstants = decayConstants
         self.ignoreBetaDecay = ignoreBetaDecay
+        
 
 
 def createEmptyList(sizeOfArray):
@@ -354,6 +357,7 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
     mySpecies.betaDecayDelta = [0.0]*(Z+1)
     nonDecayLastDelta = 0.0
 
+
     # tmpPop is the population at the beginning, midpoint or end of the interval.
     # this is used to estimate slopes for calculating k1, k2, k3, k4 or the r's (for heat transfer)
     # indexes through each value of ion charge state: q=0 to q=Z
@@ -539,6 +543,7 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
         print("Electron number density ... %s cm^-3"%'{:.2e}'.format(myEbitParams.currentDensity/(myEbitParams.electronVelocity*__ECHG__)) )
         print("Current density ... %s A/cm^2"%'{:.2e}'.format(myEbitParams.currentDensity))
 
+
         print("Tracking species Z = %s" % ', '.join(map(lambda x: str(x.Z), species) ) )
         if myEbitParams.ignoreBetaDecay == 0:
             # the list below is incredibly ugly, but it just gets the Z's of species which have nonzero decay constants.
@@ -687,7 +692,15 @@ def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
     # removed above to calculate it during the class instantiation
     mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )
     mySpecies.rrRates             = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,         createRRCrossSections   )
-    mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates_MS, 1)
+    if myEbitParams.toggleChargeExchange == 1.0:
+        print("CX toggling = %s..."%myEbitParams.toggleChargeExchange+" charge exchange included")
+        mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates_MS, 1)
+        print(mySpecies.chargeExchangeRates)
+    else:
+        print("CX toggling = %s..."%myEbitParams.toggleChargeExchange+" turning off charge exchange calculation")
+        mySpecies.chargeExchangeRates = createEmptyList(mySpecies.Z + 2)
+        print(mySpecies.chargeExchangeRates)
+
 
 
 def initEverything(species, ebitParams):
