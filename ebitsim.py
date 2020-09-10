@@ -35,6 +35,7 @@ class OutputFormating:
                        ymin=0,
                        ymax=0,
                        logx=0,
+                       logjtau=0,
                        eventsPerTimeSlice=0,
                        subDivisionOfTime=0):
         self.outputFileName = outputFileName
@@ -49,6 +50,7 @@ class OutputFormating:
         self.ymin = ymin
         self.ymax = ymax
         self.logx = logx
+        self.logjtau = logjtau
 
         #geant4MacroOutput stuff
         self.eventsPerTimeSlice = eventsPerTimeSlice
@@ -65,6 +67,11 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     # Should figure out how to put tick marks on the top and right side of graphs, they're useful!
     plt.rcParams['legend.loc'] = 'best'
     plt.figure()
+
+    if outputConfig.logjtau==1.0:
+        print("plotting using ionization factor... True")
+    else:
+        print("plotting using ionization factor... False")
 
 
     for myspecies in species:
@@ -264,11 +271,12 @@ def processConfigFile(configFileName):
         outputConfig.badGuessPlot = getConfigEntry(config, 'Output', 'badGuessPlot', reqd=False, remove_spaces=True, default_val=0)
 
         # matPlotLib stuff
-        outputConfig.xmin = float(getConfigEntry(config, 'matPlotLib', 'graphXMinTime', reqd=False, remove_spaces=True, default_val=0))
-        outputConfig.xmax = float(getConfigEntry(config, 'matPlotLib', 'graphXMaxTime', reqd=False, remove_spaces=True, default_val=0))
-        outputConfig.ymin = float(getConfigEntry(config, 'matPlotLib', 'graphYMinPop', reqd=False, remove_spaces=True, default_val=0))
-        outputConfig.ymax = float(getConfigEntry(config, 'matPlotLib', 'graphYMaxPop', reqd=False, remove_spaces=True, default_val=0))
-        outputConfig.logx = float(getConfigEntry(config, 'matPlotLib', 'graphXScale', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.xmin =    float(getConfigEntry(config, 'matPlotLib', 'graphXMinTime', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.xmax =    float(getConfigEntry(config, 'matPlotLib', 'graphXMaxTime', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.ymin =    float(getConfigEntry(config, 'matPlotLib', 'graphYMinPop', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.ymax =    float(getConfigEntry(config, 'matPlotLib', 'graphYMaxPop', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.logx =    float(getConfigEntry(config, 'matPlotLib', 'graphXScale', reqd=False, remove_spaces=True, default_val=0))
+        outputConfig.logjtau = float(getConfigEntry(config, 'matPlotLib', 'logjtau', reqd=False, remove_spaces=True, default_val=0))
 
         # geant4MacroOutput stuff
         outputConfig.eventsPerTimeSlice = float(getConfigEntry(config, 'geant4MacroOutput', 'eventsPerTimeSlice', reqd=False, remove_spaces=True, default_val=0))
