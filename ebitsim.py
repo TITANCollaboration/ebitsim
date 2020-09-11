@@ -286,10 +286,12 @@ def processConfigFile(configFileName):
             beamRadius = float(getConfigEntry(config, myebitParams, 'beamRadius', reqd=False, remove_spaces=True, default_val=0.0))
             pressure = float(getConfigEntry(config, myebitParams, 'pressure', reqd=False, remove_spaces=True, default_val=0.0))
             ionTemperature = float(getConfigEntry(config, myebitParams, 'ionTemperature', reqd=False, remove_spaces=True, default_val=0.0))
-            ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature))
+            toggleChargeExchange = float(getConfigEntry(config, 'Run', 'chargeExchange', reqd=False, remove_spaces=True, default_val=1.0))
+            ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature, toggleChargeExchange))
 
         # Gets the speciesList from under the [Run] headline
         speciesList = tuple(getConfigEntry(config, 'Run', 'speciesList', reqd=True, remove_spaces=True).split(","))
+
         species = []
 
         for myspecies in speciesList:
