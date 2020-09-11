@@ -66,11 +66,10 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
     plt.rcParams['legend.loc'] = 'best'
     plt.figure()
 
-
     for myspecies in species:
         for chargeStateResults in range(0, len(myspecies.results)):
             mylabel = getElementAbv(myspecies.Z) + str(myspecies.chargeStates[chargeStateResults]) + '+'
-            default_cycler = (cycler(linestyle=['--', '-', ':', '-.']) * cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'r']))
+            default_cycler = (cycler(color=['b', 'k', 'g', 'y', 'c', 'm', 'r']) + cycler(linestyle=['--', '-', ':', '-.', '--', '-', ':']))
             plt.rc('lines', linewidth=2)
             plt.rc('grid', color='k', linestyle=':', linewidth=0.5) 
             plt.rc('axes', grid=True, prop_cycle=default_cycler)
@@ -84,7 +83,6 @@ def plotSpeciesResults(species, ebitParams, outputConfig):
                 plt.xscale('log')
 
     plt.ylabel('Population')
-    # plt.xlabel(r'$log(J\tau)$'))
     plt.xlabel('Breeding time (s)')
     beamEnergies = ''
 
@@ -127,20 +125,6 @@ def plotSpeciesEnergies(species, ebitParams, outputConfig):
     plt.xlabel("Breeding time [s]")
     plt.legend(framealpha=0.5)
     plt.savefig(outputConfig.outputFileName.split(".")[0]+"_energy.png", dpi=300)
-    return
-
-def plotStepsVsIteration(species, outputConfig):
-    import matplotlib
-    import matplotlib.pyplot as plt
-    
-
-    plt.figure()
-    plt.plot(column(species[0].results[0], 0), column(species[0].results[0], 3))
-    plt.ylabel("size of time step used [s]")
-    plt.xlabel("time [s]")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.savefig(outputConfig.outputFileName.split(".")[0]+"_stepSize.png", dpi=300)
     return
 
 
@@ -208,8 +192,6 @@ def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
     if outputConfig.outputType == 'matplotlib':
         print("Writing charge state graph to : %s" % outputConfig.outputFileName)
         plotSpeciesResults(species, ebitParams, outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
-        print("Writing step size graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_stepSize.png"))
-        plotStepsVsIteration(species, outputConfig)
         if species[0].initSCITemp != None: # if including energy dynamics, plot that too
             print("Writing energy graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_energy.png"))
             plotSpeciesEnergies(species, ebitParams, outputConfig)
@@ -286,12 +268,10 @@ def processConfigFile(configFileName):
             beamRadius = float(getConfigEntry(config, myebitParams, 'beamRadius', reqd=False, remove_spaces=True, default_val=0.0))
             pressure = float(getConfigEntry(config, myebitParams, 'pressure', reqd=False, remove_spaces=True, default_val=0.0))
             ionTemperature = float(getConfigEntry(config, myebitParams, 'ionTemperature', reqd=False, remove_spaces=True, default_val=0.0))
-            toggleChargeExchange = float(getConfigEntry(config, 'Run', 'chargeExchange', reqd=False, remove_spaces=True, default_val=1.0))
-            ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature, toggleChargeExchange))
+            ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature))
 
         # Gets the speciesList from under the [Run] headline
         speciesList = tuple(getConfigEntry(config, 'Run', 'speciesList', reqd=True, remove_spaces=True).split(","))
-
         species = []
 
         for myspecies in speciesList:
