@@ -35,6 +35,7 @@ def geant4MacroOutput(species, ebitParams, outputConfig):
                                                                                       mySpecies.results[chargeStateResults][myrow][0]))
                         geantMacroFile.write("/pga/selectGunAction 1\n")
                         geantMacroFile.write("/gps/particle ion\n")
+                        #geantMacroFile.write("/gps/ion %i %i %i 1851.31 keV\n" % (mySpecies.Z,  mySpecies.A, mySpecies.chargeStates[chargeStateResults]))  # /gps/ion Z, A, Q, E
                         geantMacroFile.write("/gps/ion %i %i %i\n" % (mySpecies.Z,  mySpecies.A, mySpecies.chargeStates[chargeStateResults]))  # /gps/ion Z, A, Q, E
                         geantMacroFile.write("/gps/position 0 0 0\n")
                         geantMacroFile.write("/gps/ene/mono 0\n")
@@ -43,7 +44,7 @@ def geant4MacroOutput(species, ebitParams, outputConfig):
                                                                                              mySpecies.A,
                                                                                              mySpecies.chargeStates[chargeStateResults],
                                                                                              mySpecies.results[chargeStateResults][myrow][0]))
-                        geantMacroFile.write("/run/beamOn %i\n" % (decaysPerStep))
+                        geantMacroFile.write("/run/beamOn %i\n" % (decaysPerStep)) # Can throw in a multiplier here if needed to simulate longer runs without having to simulate all of it
                         # geantMacroFile.write("/run/beamOn %i\n" % (outputConfig.eventsPerTimeSlice * mySpecies.results[chargeStateResults][myrow][1]))
                         geantMacroFile.write("# END\n")
                         # geantMacroFile.write("")

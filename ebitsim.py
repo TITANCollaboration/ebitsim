@@ -257,6 +257,7 @@ def processConfigFile(configFileName):
             beamRadius = float(getConfigEntry(config, myebitParams, 'beamRadius', reqd=False, remove_spaces=True, default_val=0.0))
             pressure = float(getConfigEntry(config, myebitParams, 'pressure', reqd=False, remove_spaces=True, default_val=0.0))
             ionTemperature = float(getConfigEntry(config, myebitParams, 'ionTemperature', reqd=False, remove_spaces=True, default_val=0.0))
+            print("Beam Radius:", beamRadius)
             ebitParams.append(ebitChargeDistribution.EbitParams(breedingTime, probeEvery, ionEbeamOverlap, beamEnergy, beamCurrent, beamRadius, pressure, ionTemperature))
 
         # Gets the speciesList from under the [Run] headline
