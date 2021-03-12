@@ -17,6 +17,7 @@ __ALPHA__ = 7.2974e-3  # "fine-structure constant"
 __CHEXCONST__ = 2.25e-16  # "Constant for use in charge-exchange "
 __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
 __kB__ = 1.381e-23  # "Boltzmann constant"
+__Epgas__ = 7.0 # first ionization potential of H2 gas in eV (was 15.42593 eV, Oliver says 7 is correct)
 
 
 
@@ -48,7 +49,9 @@ class Species:
                  halfLife=0.0,
                  populationNumber=0.0,
                  initSCITemp = None,
-                 NkT=0.0, # total energy of charge state of the species.
+                 # The lines above need to stay in the same order
+                 NkT=0.0,
+                 qkT = None, 
                  population=None,
                  decayConstant=0.0,
                  ionizationRates=None,
@@ -61,19 +64,22 @@ class Species:
                  betaDecayDelta = 0.0,
                  truncationError = 0.0,
                  stepCounter = 0,
-                 k1=[], # rk4 charge evolution values
+                 k1=[],
                  k2=[],
                  k3=[],
                  k4=[],
-                 j1=[], # rk4 energy evolution values
-                 j2=[],
-                 j3=[],
-                 j4=[],
+                 r1=[],
+                 r2=[],
+                 r3=[],
+                 r4=[],
                  tmpPop=[],
                  tmpEnergy=[],
                  y1=[],
                  y12=[],
                  y22=[],
+                 f1=[],
+                 f12=[],
+                 f22=[],
                  results=[]):
         self.Z = Z
         self.A = A
@@ -99,6 +105,9 @@ class Species:
 
 class RkStepParams:
     def __init__(self, minCharge=5e-5, tStep=1e-6, desiredAccuracyPerChargeState=1e-7, desiredAccuracy=0):
+        # Is this a bad thing to have the initial time step at 1e-6?
+        # Threshold breeding on Ne20, for 1+ to 2+ requires time scales of 1e-5 about. But clearly
+        # the adaptive algorithm is working and minimizing this right away...
         self.minCharge = minCharge
         self.tStep = tStep
         self.desiredAccuracyPerChargeState = desiredAccuracyPerChargeState
@@ -138,6 +147,10 @@ def createEmptyList(sizeOfArray):
     myEmptyList = [0.0 for i in range(sizeOfArray)]
     return myEmptyList
 
+def createEmptyListOfList(sizeOfArray):
+    val = [[0.0, 0.0] for i in range(sizeOfArray)]
+    return val
+
 
 def createDecayConstants(betaHalfLife):
     if betaHalfLife <= 0:
@@ -148,19 +161,40 @@ def createDecayConstants(betaHalfLife):
 
 
 def createChargeExchangeRates(Z, A, pressure, ionTemperature):
-    # We are not sure of where this formula for CX cross sections is derived from
-    # possibly might change to formulation of Salzborn & Mueller 1977 work.
+    """ We are not sure of where this formula for CX cross sections is derived from
+    It compares the velocity of the electron with the velocity of a 1s electron in 
+    the hydrogen atom. Looks similar to Lotz formula.
+    """
     chargeExchangeRates = [0] * (Z + 1)
 
     # Need to return a Z+1 array
-    h2Density = pressure * __TORR__
+    h2Density = pressure * __TORR__ # using IGL, determine number density of H2 from the prescribed pressure
     ionMassInAMU = A * __AMU__
     avgIonV = __C__ * sqrt(8.0 * (ionTemperature / (pi * ionMassInAMU)))
+
     avgIonVinBohr = avgIonV / __VBOHR__
     sigV = __CHEXCONST__ * log( 15.0 / avgIonVinBohr) * avgIonV
 
     for i in range(1, Z + 1):
         chargeExchangeRates[i] = i * sigV * h2Density
+    return chargeExchangeRates
+
+
+def createChargeExchangeRates_MS(Z, A, pressure, ionTemperature):
+    """ An implementation using the work of Salzborn and Mueller from 1977 paper.
+    """
+
+    chargeExchangeRates = [0] * (Z + 1)
+
+    h2Density = pressure * __TORR__
+    
+
+    # Epgas is the ionization potential of the background gas. Make this adjustable?
+
+    # The full cross section includes qi^alphak, but this is added in the loop below.
+    sigV = __SALZBORNAK__*__Epgas__**__SALZBORNBETAK__
+    for i in range(1, Z+1):
+        chargeExchangeRates[i] = h2Density*sigV*i**__SALZBORNALPHAK__
     return chargeExchangeRates
 
 
@@ -177,7 +211,8 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
     #  interaction. Returns array of size Z-ION+1 with rates."
     interactionRate = [0] * (Z + 1)
 
-    electronVelocity = __C__ * sqrt(2 * (beamEnergy / __EMASS__))
+    electronVelocity = __C__*sqrt(1-(beamEnergy/__EMASS__+1)**-2)
+    # electronVelocity = __C__ * sqrt(2 * (beamEnergy / __EMASS__))
 
     # electron number density
     electronRate = currentDensity / __ECHG__ / electronVelocity
@@ -190,11 +225,12 @@ def createInteractionRates(Z, beamEnergy, currentDensity, crossSections):
 
 
 def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecFunc, runChargeExchange=0):  # move away from chex=0 and move into object
-
+    
     interactionRates = createEmptyList(mySpecies.Z + 2)
     if runChargeExchange == 0:
         myFuncValues = createInteractionRates(mySpecies.Z, myEbitParams.beamEnergy, myEbitParams.currentDensity, crossSecFunc(myEbitParams.beamEnergy, mySpecies.Z))
     else:
+
         myFuncValues = crossSecFunc(mySpecies.Z, mySpecies.A, ebitParams[0].pressure, ebitParams[0].ionTemperature)
 
     # Reorganizes output for return
@@ -203,7 +239,7 @@ def createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, crossSecF
 
     return interactionRates
 
-def calculateIonHeating(mySpecies, species, Z, spitzerHeatingRates, tstep):
+def calculateIonHeating(mySpecies, Z, spitzerHeatingRates, tstep):
     retArray = [0.0 for i in range(0, Z+1)]
 
     for qindex in range(0, Z+1):
@@ -211,35 +247,9 @@ def calculateIonHeating(mySpecies, species, Z, spitzerHeatingRates, tstep):
     return retArray
 
 def calculateJ(mySpecies, species, tmpEnergy, Z, spitzerHeatingRates, retJ, Ei, kfactor, weighting, tstep):
-    """ j is analogous to k but for evolving energy instead of population. Energy of a charge state is the product of the
-    individual energy and the population.
-
-    Actually we don't need the k's. We simply calculate through the whole RK using j's. So to start the calculation, we
-    use the initial population. Then we propagate in time to add energy.
-
-    initSCITemp allows us to provide an injection temperature in eV. Using this initial temperature, we instantiate
-    NkT as an array of zeros, except for the SCI index (1) which contains initSCITemp. For the first iteraction, we
-    use the number of ions in a given charge state Ni and we propagate the energy of each charge state forward.
-
-    On the next cycle, we see how the populations have changed by the charge interactions, and then we propagate the
-    energy foreward using those results. So obviously the temperature of a charge state won't rise until we see that
-    some ions are in that charge state.
-
-    question: once the charge state distribution no longer contains any SCI, what becomes of that temperature? It
-    should go down, but I'm not seeing a mechanism for how it decreases... i.e. the rate never has a chance to be
-    negative... unless the coulomb logarithm?
-
-    Also, the adaptive timestep is responding to the change in population. I think I will not change this. Cases where
-    the temperature changes very quickly are... high charge state
-
-    -----
-
-    Ok now I'm becoming confused... RK4 algorithm where we calculate the different K's, etc. Is this even needed?
-
-    I think so, but that I will have to reformulate the calculations a little. For Spitzer heating, the RHS is not
-    explicitly a function of the energy of the charge state distribution, but for ion-ion interactions, there seems
-    to be a dependence on relative energy of the charge state distributions. This means I need to be careful in
-    how the RK4 increments are being calculate as they are not the same as the charge state evolution equation.
+    """ 
+    This will be used later for RK4 of the energy balance equation. The J is then analogous to the K's
+    calculated for the RK4 algorithm.
     """
 
     # we iterate through charge states and use this to keep track of deltas
@@ -265,8 +275,11 @@ def calculateJ(mySpecies, species, tmpEnergy, Z, spitzerHeatingRates, retJ, Ei, 
 
     return retJ
 
-def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates,  retK, p1, p2, addWFactor, tstep):
+def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates, retK, p1, p2, addWFactor, tstep):
     # k's are the increments used in the Runge Kutta 4 iterative method
+
+
+    
 
     # Lengths here are Z+1 because we have a neutral charge state to account for.
     mySpecies.betaDecayDelta = [0.0]*(Z+1)
@@ -291,9 +304,6 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
         nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
-#                                 + (    ionizationRates[zindex - 1] * tmpPop[zindex - 1] )
-#                                 - (    chargeExchangeRates[zindex] * tmpPop[zindex]     )
-#                                 - (                rrRates[zindex] * tmpPop[zindex]     )
                                  + (chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
                                  + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
 
@@ -301,13 +311,18 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
             mySpecies.betaDecayDelta[zindex] = mySpecies.tmpPop[zindex]*mySpecies.decayConstant*tstep
             # mySpecies.betaDecayDelta[zindex] = betaDecay1(mySpecies, species, ebitParams, zindex, tstep)
 
+
+        # charge changing reactions
         retK[zindex] = (nonDecayDelta - nonDecayLastDelta)
         nonDecayLastDelta = nonDecayDelta
 
+
     # Filling of Z index
     retK[Z] = (-nonDecayLastDelta)
+
+
     # should this be tmpPop instead of mySpecies.tmpPop?
-    mySpecies.betaDecayDelta[Z] = mySpecies.tmpPop[Z]*mySpecies.decayConstant*tstep
+    mySpecies.betaDecayDelta[Z] = tmpPop[Z]*mySpecies.decayConstant*tstep
 
     # The portion deals with cross-species rates of beta decay. Determines if neighboring species affect each other.
     mySpeciesIndex = species.index(mySpecies)
@@ -329,45 +344,158 @@ def calculateK(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, charg
     return retK
 
 
+def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, chargeExchangeRates, rrRates, retK, retR, p1, p2, addWFactor, tstep):
+    """ 
+    A new function from calculateK() so that we can allow heat transfer which occurs which changing charge state populations.
+    """
+
+    ionMassIneV = mySpecies.A*__AMU__
+    # Lengths here are Z+1 because we have a neutral charge state to account for.
+    mySpecies.betaDecayDelta = [0.0]*(Z+1)
+    nonDecayLastDelta = 0.0
+
+    # tmpPop is the population at the beginning, midpoint or end of the interval.
+    # this is used to estimate slopes for calculating k1, k2, k3, k4 or the r's (for heat transfer)
+    # indexes through each value of ion charge state: q=0 to q=Z
+    for qindex in range(0, Z+1):
+        tmpPop[qindex]    = p1[qindex] + (p2[qindex] * addWFactor)
+        # tmpEnergy[qindex] = E1[qindex] + (E2[qindex] * addWFactor)
+
+    # This only indexes to Z-1 because the Z index is filled separately
+    for zindex in range(0, Z):
+        # Calculate changes in charge state populations:
+        # dNi = dt * ( Rei(i-1) - Rei(i) + Rrr(i+1) - Rrr(i) + Rcx(i+1) - Rcx(i) )
+        #     where Ni is population of charge state i
+        #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
+        avgIonV = __C__*sqrt(8.0*ebitParams.ionTemperature/(pi*ionMassIneV))
+        # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
+        # value is retained and used for the next step to account for rates between q-1 and q.
+        nonDecayDelta = tstep * (- (        ionizationRates[zindex] * tmpPop[zindex]     )
+                                 + (avgIonV*chargeExchangeRates[zindex + 1] * tmpPop[zindex + 1] )
+                                 + (            rrRates[zindex + 1] * tmpPop[zindex + 1] ) )
+
+        if ebitParams.ignoreBetaDecay != 1:  # ignore if we don't have any to speed things up
+
+            # changed from mySpecies.tmpPop to tmpPop... shouldn't have any adverse effects.
+            mySpecies.betaDecayDelta[zindex] = tmpPop[zindex]*mySpecies.decayConstant*tstep
+            # mySpecies.betaDecayDelta[zindex] = betaDecay1(mySpecies, species, ebitParams, zindex, tstep)
+
+        # charge changing reactions
+        retK[zindex] = (nonDecayDelta - nonDecayLastDelta)
+        nonDecayLastDelta = nonDecayDelta
+
+
+    # Filling of Z index
+    retK[Z] = (-nonDecayLastDelta)
+
+    # A new attempt for populating retR. Trying to reduce occurance of rounding errors blowing up.
+    # It is on purpose that this only indexes up to Z-1
+    for qindex in range(0,Z):
+        # retR = [ amount lost by ionization of q(i),
+        #          amount gained by RR and CX of q(i+1)]
+        retR[qindex] = [ tstep*ionizationRates[qindex]*tmpPop[qindex], 
+                         tstep*(chargeExchangeRates[qindex+1]+rrRates[qindex+1])*tmpPop[qindex+1]]
+
+
+
+    mySpecies.betaDecayDelta[Z] = tmpPop[Z]*mySpecies.decayConstant*tstep
+
+    # The portion deals with cross-species rates of beta decay. Determines if neighboring species affect each other.
+    mySpeciesIndex = species.index(mySpecies)
+    if mySpeciesIndex != 0 and mySpecies.Z - species[mySpeciesIndex-1].Z == 1:
+        # first condition: if mySpeciesIndex==0, then nothing is populating our species with beta decay
+        # second condition: if the next lower index of species is one unit of Z away, it populates mySpecies
+
+        # this is confusing. To the original retK, we subtract the beta decay rate of mySpecies and add the beta decay rate
+        # of species[mySpeciesIndex-1]. Since betaDecayDelta of the species at Z-1 is shorter in length by 1 we must add a [0] at beginning
+        retK = [*map(lambda x: x[0]-x[1]+x[2], zip(retK, mySpecies.betaDecayDelta, [0]+species[mySpeciesIndex-1].betaDecayDelta))]
+    else:
+        # else we just do the regular and subtract the beta decay rate.
+        retK = [x[0]-x[1] for x in zip(retK, mySpecies.betaDecayDelta)]
+
+    return retK, retR
+
+
 def rkStep(ebitParams, mySpecies, species, tstep, populationAtT0, populationAtTtstep):
     # longer function param calls yes but it speeds it up calculateK by 10%...
+    """
+    Here we are returning k's and r's, but it might be easier to just return the r's because the population change can still be
+    calulated from this. In addition, rounding errors wouldn't be a problem anymore.
+    """
+    # print("\nRunning an RK step... ")
+
+    # mySpecies.k1, mySpecies.r1 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, mySpecies.r1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
+    # mySpecies.k2, mySpecies.r2 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, mySpecies.r2, populationAtT0,     mySpecies.k1, 0.5, tstep)
+    # mySpecies.k3, mySpecies.r3 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, mySpecies.r3, populationAtT0,     mySpecies.k2, 0.5, tstep)
+    # mySpecies.k4, mySpecies.r4 = calculateKR(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, mySpecies.r4, populationAtT0,     mySpecies.k3, 1.0, tstep)
+    
     mySpecies.k1 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k1, populationAtT0, mySpecies.tmpPop, 0.0, tstep)
-    mySpecies.k2 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, populationAtT0, mySpecies.k1,     0.5, tstep)
-    mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0, mySpecies.k2,     0.5, tstep)
-    mySpecies.k4 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, populationAtT0, mySpecies.k3,     1.0, tstep)
+    mySpecies.k2 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k2, populationAtT0,     mySpecies.k1, 0.5, tstep)
+    mySpecies.k3 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k3, populationAtT0,     mySpecies.k2, 0.5, tstep)
+    mySpecies.k4 = calculateK(ebitParams, mySpecies, species, mySpecies.tmpPop, mySpecies.Z, mySpecies.ionizationRates, mySpecies.chargeExchangeRates, mySpecies.rrRates, mySpecies.k4, populationAtT0,     mySpecies.k3, 1.0, tstep)
+    
+
+    # print("k values for q=1:")
+    # print("k1 %s"%mySpecies.k1[1])
+    # print("k2 %s"%mySpecies.k2[1])
+    # print("k3 %s"%mySpecies.k3[1])
+    # print("k4 %s"%mySpecies.k4[1])
 
     # Updates the population of each charge state in the species.
     for qindex in range(0, mySpecies.Z + 1):
+        # new energy value     = ( kT(q-1)(pop gained by q-1) - kT(q)(lost by q) + kT(q+1)(gained by q+1) ) / total change in population 
+        # populationAtTtstep[qindex] = populationAtT0[qindex] + ((1 / 6) * (sum(mySpecies.r1[qindex]) + (2 * sum(mySpecies.r2[qindex]) + sum(mySpecies.r3[qindex]) )  + sum(mySpecies.r4[qindex]) ))
         populationAtTtstep[qindex] = populationAtT0[qindex] + ((1 / 6) * (mySpecies.k1[qindex] + (2 * (mySpecies.k2[qindex] + mySpecies.k3[qindex])) + mySpecies.k4[qindex]) )
+
+    # New calculation of time stepped energy
+    # deltaPop = [loss by q(i) from EI, gain by q(i) from CX or RR]
+    # for q in range(0, mySpecies.Z+1):
+    #     deltaPop = [(mySpecies.r1[q][i] + (2 * (mySpecies.r2[q][i] + mySpecies.r3[q][i])) + mySpecies.r4[q][i])/6 for i in range(0,2)]
+    #     # print("DeltaPop for q=%s"%q+": %s"%deltaPop)
+    #     if q==0:
+    #         try:
+    #             #this one is with gain only...
+    #             energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1])
+    #             #this one is with gain and loss... caused problems
+    #             # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
+    #         except ZeroDivisionError:
+    #             energyAtTtstep[q] = energyAtT0[q]
+    #     elif q==mySpecies.Z:
+    #         lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
+    #         try:
+    #             #gain only
+    #             energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
+    #             # gain and loss
+    #             # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0]) / (populationAtTtstep[q])
+    #         except ZeroDivisionError:
+    #             energyAtTtstep[q] = energyAtT0[q]
+    #     else:
+    #         lowerQ = [(mySpecies.r1[q-1][i] + (2 * (mySpecies.r2[q-1][i] + mySpecies.r3[q-1][i])) + mySpecies.r4[q-1][i])/6 for i in range(0,2)]
+    #         # print("lowerQ: %s"%lowerQ)
+    #         try:
+    #             #gain
+    #             # print("energyAtT0[q-1] = %s"%energyAtT0[q-1] + ", lowerQ[0] = %s"%lowerQ[0]+", populationAtT0[q]=%s"%populationAtT0[q]+", deltaPop[1]=%s"%deltaPop[1])
+    #             energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtT0[q]+deltaPop[1]+lowerQ[0])
+    #             #gain and loss
+    #             # energyAtTtstep[q] = (energyAtT0[q]*(populationAtT0[q]-deltaPop[0]) + energyAtT0[q-1]*lowerQ[0] + energyAtT0[q+1]*deltaPop[1]) / (populationAtTtstep[q])
+    #         except ZeroDivisionError:
+    #             energyAtTtstep[q] = energyAtT0[q]
+
+    
+    # print("Initial pop: %s"%populationAtT0 + ",\nfinal pop:   %s"%populationAtTtstep)
+    # print("Initial temp: %s"%energyAtT0 + ",\nfinal temp:   %s"%energyAtTtstep)
     return
 
 def rkStepEnergy(ebitParams, mySpecies, species, tstep, energyAtT0):
-    """ This performs an RK step for the energies of the ion cloud (each charge state). It is separate from the population
-    rk step for one main reason: the adaptiive time step algorithm uses the change in population as a metric for whether
-    the timestep needs to be shortened or lengthened. To avoid calculating an RK energy step multiple times, we only
-    calculate it when the adaptive algorithm has accepted the population change.
+    """ This is currently implemented as an RK step that doesn't get included in consideration for the adaptive time step...
+    although that is a mistake.
 
-    This should use exactly the same framework as the population RK step, using analogous variables j (instead of k) and
-    tmpEnergy instead of tmpPop, etc.
-    
+    It take in energyAtT0, and then calculates how much heat was transferred to the charge state q(i) by three avenues:
+        Heat given by q(i-1)
+        Heat given by q(i+1)
+        Heat lost by q(i)
     """
-    energyAtTtStep = [0.0 for i in range(len(energyAtT0))]
-
-    # calculateJ is for ion-ion interactions which need an RK step.
-    #              calculateJ(mySpecies, species,           tmpEnergy,           Z,           spitzerHeatingRates, retJ,         Ei,       kfactor, weighting, tstep)
-    # mySpecies.j1 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0, mpSpecies.tmpEnergy, 0.0, tstep)
-    # mySpecies.j2 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0,        mySpecies.j1, 0.5, tstep)
-    # mySpecies.j3 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0,        mySpecies.j2, 0.5, tstep)
-    # mySpecies.j4 = calculateJ(mySpecies, species, mySpecies.tmpEnergy, mySpecies.Z, mySpecies.spitzerHeatingRates, retJ, energyAtT0,        mySpecies.j3, 1.0, tstep)
-
-
-
-    # Updates the energy of each charge state in the species.
-    for qindex,val in enumerate(energyAtT0):
-        energyAtTtStep[qindex] = energyAtT0[qindex] + calculateIonHeating(mySpecies, species, mySpecies.Z, mySpecies.spitzerHeatingRates, tstep)[qindex]
-
-        # energyAtTtstep[qindex] = energyAtT0[qindex] + ((1 / 6) * (mySpecies.j1[qindex] + (2 * (mySpecies.j2[qindex] + mySpecies.j3[qindex])) + mySpecies.j4[qindex]) )
-    return energyAtTtStep
+    return 
 
 
 def probeFnAddPop(time, ebitParams, mySpecies):
@@ -419,15 +547,17 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
         # Calculate the static portions of the interaction rates. New one for each new EBIT configuration
         for mySpecies in species:
             calcRateMatrices(mySpecies, myEbitParams, ebitParams)
-            mySpecies.NkT = [0.0 for i in range(0, mySpecies.Z+1)]
 
             if mySpecies.initSCITemp != -1:
                 print("initSCITemp detected... including energy dynamics")
+                # calculates the static portion of the energy rates.... similar to what is done with calcRateMatrices()
                 calcEnergyRates(mySpecies, myEbitParams, ebitParams)
-                # print(mySpecies.spitzerHeatingRates)
-                mySpecies.NkT[1] = mySpecies.initSCITemp # initialize energy array with the SCI energy
+                # initialize energy array with the total SCI energy
+                mySpecies.NkT[1] = mySpecies.initSCITemp
 
         # Enter rk stepping loop
+        print("Entering RK stepping loop...")
+
         while t <= timeToBreed:
 
             # Compute population change for all species in the EBIT.
@@ -441,10 +571,19 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 # Therfore y22 is a more accurate estimation at t0 + 2*tstep than y1.
 
                 # start = time.time()
-                #                                                   initial population,   extrapolated population
+                # print("\n-----------------Starting first RK step-----------------")
+                #                                                   initial population,   extrap. pop,  initial energy, extrap. energy
                 rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 )
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12)
                 rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22)
+
+                # rkStep(ebitParams[0], mySpecies, species, 2 * step, mySpecies.population, mySpecies.y1 , mySpecies.NkT, mySpecies.f1)
+                # rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.population, mySpecies.y12, mySpecies.NkT, mySpecies.f12)
+                # rkStep(ebitParams[0], mySpecies, species,     step, mySpecies.y12,        mySpecies.y22, mySpecies.f12, mySpecies.f22)
+
+                # print("-----------------Finished with last RK step--------------\n")
+
+
                 # end = time.time()
                 # print("t = %s"%str(t)+", duration of Z=%s "%str(mySpecies.Z)+ ", 3 rkStep calculations: %s" %str(end-start))
 
@@ -460,9 +599,12 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
             # If ANY of the diff's are >0, then we perform the bestStepSize calculation
             if any(i>0 for i in map(lambda x: x.diff, species)):
                 # If y22 != y1, we determine the best step size.
+                # print("wasn't the perfect step size... adjusting bestStepSize")
                 for mySpecies in species:
+                    # print("original step size: %s"%mySpecies.bestStepSize)
                     if mySpecies.diff != 0:
                         mySpecies.bestStepSize = step * ((ebitParams[0].rkParams.desiredAccuracy / mySpecies.diff) ** 0.2)
+                        # print("new step size: %s"%mySpecies.bestStepSize)
             else:
                 # If y1 == y22 for all species (unlikely), then we chose the perfect step size.
                 # we commit y22 and continue to the next step
@@ -470,28 +612,42 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
 
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
-                    if mySpecies.initSCITemp != -1:
-                        mySpecies.NkT = rkStepEnergy(ebitParams[0], mySpecies, species, 2*step, mySpecies.NkT)
+                    # print("initial temperatur is %s"%mySpecies.NkT)
+                    # print("initial population is %s"%mySpecies.population)
+                    # print("final   temperatur is %s"%mySpecies.f22)
+                    # print("final   population is %s"%mySpecies.y22)
+                    # print("\n")
+                    # if mySpecies.initSCITemp != -1:
+                    #     mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
                     
 
                 # Continue means we start again at the beginning of the species loop!
                 continue
 
-            # If we get here, the first if statement was entered and bestStepSize has been adjusted.
+            # If we get here, the first if statement (line 584) was entered and bestStepSize has been adjusted.
             # If ALL of the bestStepSizes are greater than step, we commit y22, increment time, and adjust step
             if all(i >= step for i in map(lambda x: x.bestStepSize, species)):
                 t += 2*step
                 bestStepSize = min(map(lambda x: x.bestStepSize, species))
                 for mySpecies in species:
                     mySpecies.stepCounter += 1
-                    if mySpecies.initSCITemp != -1:
-                        mySpecies.NkT = rkStepEnergy(ebitParams[0], mySpecies, species, 2*step, mySpecies.NkT) # we use population before y22 is written to it.
+                    # print("initial temperatur is %s"%mySpecies.NkT)
+                    # print("initial population is %s"%mySpecies.population)
+                    # print("final   temperatur is %s"%mySpecies.f22)
+                    # print("final   population is %s"%mySpecies.y22)
+                    # print("\n")
+                    # if min(mySpecies.f22) < 0.0:
+                    #     print("min of mySpecies.f22 is %s"%min(mySpecies.f22)+", at q is %s"%mySpecies.f22.index(min(mySpecies.f22)))
+                    #     sys.exit("Energy became negative... ")
+                    # if mySpecies.initSCITemp != -1:
+                    #     mySpecies.NkT = copy.copy(mySpecies.f22)
                     mySpecies.population = copy.copy(mySpecies.y22)
             else:
                 # If we get here, one of the mySpecies.bestStepSize values is smaller than step
                 # and we need to re-perform this time loop with an adjusted step value.
                 # We do NOT increment the time
+                # print("Step rejected, it was too small...")
                 bestStepSize = min(map(lambda x: x.bestStepSize, species))
                 mySpecies.noTooBigSteps += 1
 
@@ -504,7 +660,6 @@ def adaptiveRkStepper(species, ebitParams, probeFnAddPop):
                 nextPrint += ebitParams[0].probeEvery
                 # print("noTooBigSteps: %s"%str(mySpecies.noTooBigSteps))
                 for mySpecies in species:
-                    # print("probing energy...  %s"%str(mySpecies.NkT))
                     probeFnAddPop(t, ebitParams[0], mySpecies)
         # print("Final step size: %s"%str(step))
 
@@ -518,11 +673,15 @@ def calcEnergyRates(mySpecies, myEbitParams, ebitParams):
 
 
 def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
-        # myEbitParams.currentDensity   = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
-        # removed above to calculate it during the class instantiation
-        mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )
-        mySpecies.rrRates             = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,         createRRCrossSections   )
-        mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates, 1)
+    print("Calculating rate matrices...")
+    """ These here are what I would call the "static" portion of the rates. They are calculated before the time stepping occurs because
+    the information they hold is not dynamic.
+    """
+    # myEbitParams.currentDensity   = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
+    # removed above to calculate it during the class instantiation
+    mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )
+    mySpecies.rrRates             = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,         createRRCrossSections   )
+    mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates_MS, 1)
 
 
 def initEverything(species, ebitParams):
@@ -542,8 +701,8 @@ def initEverything(species, ebitParams):
 
     for mySpecies in species:
         # Initilize everything ...
-        mySpecies.population = createEmptyList(largestZValue + 2)
-        mySpecies.population[0] = mySpecies.initSCIPop
+        mySpecies.population = createEmptyList(largestZValue + 2) # I forget why I needed this...
+        mySpecies.population[1] = mySpecies.initSCIPop
         mySpecies.decayConstant = createDecayConstants(mySpecies.betaHalfLife)
 
         if mySpecies.decayConstant > 0:  # If we don't need it we will use this to ignore the beta calculation function
@@ -553,14 +712,24 @@ def initEverything(species, ebitParams):
 
         # These arrays are dynamic and only hold instantaneous information for calculations of the population
         # of each charge state of a species.
-        mySpecies.k1 = createEmptyList(mySpecies.Z + 2)
-        mySpecies.k2 = createEmptyList(mySpecies.Z + 2)
-        mySpecies.k3 = createEmptyList(mySpecies.Z + 2)
-        mySpecies.k4 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.k1     = createEmptyList(mySpecies.Z + 2)
+        mySpecies.k2     = createEmptyList(mySpecies.Z + 2)
+        mySpecies.k3     = createEmptyList(mySpecies.Z + 2)
+        mySpecies.k4     = createEmptyList(mySpecies.Z + 2)
         mySpecies.tmpPop = createEmptyList(mySpecies.Z + 2)
-        mySpecies.y1 = createEmptyList(mySpecies.Z + 2)
-        mySpecies.y12 = createEmptyList(mySpecies.Z + 2)
-        mySpecies.y22 = createEmptyList(mySpecies.Z + 2)
+        mySpecies.tmpEnergy = createEmptyList(mySpecies.Z + 2)
+        mySpecies.NkT    = createEmptyList(mySpecies.Z + 2)
+        mySpecies.y1     = createEmptyList(mySpecies.Z + 2)
+        mySpecies.y12    = createEmptyList(mySpecies.Z + 2)
+        mySpecies.y22    = createEmptyList(mySpecies.Z + 2)
+        mySpecies.f1     = createEmptyList(mySpecies.Z + 2)
+        mySpecies.f12    = createEmptyList(mySpecies.Z + 2)
+        mySpecies.f22    = createEmptyList(mySpecies.Z + 2)
+        # these need to be list of list because we separate each k into contributions from q-1, q, and q+1
+        mySpecies.r1     = createEmptyListOfList(mySpecies.Z + 2)
+        mySpecies.r2     = createEmptyListOfList(mySpecies.Z + 2)
+        mySpecies.r3     = createEmptyListOfList(mySpecies.Z + 2)
+        mySpecies.r4     = createEmptyListOfList(mySpecies.Z + 2)
 
         mySpecies.results = []
     INITILIZEDEVERYTHING = 1
@@ -576,7 +745,7 @@ def calcChargePopulations(species, ebitParams, probeFnAddPop):
     for mySpecies in species:
         print("------------------------------------------------------- \n")
         print("Species diagnostics for Z = %s:" %str(mySpecies.Z))
-        print("    Checking final EBIT population of species... %s" %str(sum([i[-1][-1] for i in mySpecies.results]) ))
+        print("    Checking final EBIT population of species... %s" %str(sum([i[-1][1] for i in mySpecies.results]) ))
         print("    Total number of time steps used... %s" %str(mySpecies.stepCounter) )
         print("    Number of bad step guesses... %s" %str(mySpecies.noTooBigSteps))
         print("    Global truncation error... %s" %str(mySpecies.truncationError))

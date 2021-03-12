@@ -35,6 +35,42 @@ __MAXCHARGE__ = 105
 __MAXSPECIES__ = 1000
 
 
+
+def ebeamPotential(r, re, Ee, I):
+	""" Returns the space charge potential at some radial point r.
+
+	Requires the radius of the electron beam re [cm], the electron energy [eV],
+	and the total current [A]
+	"""
+	top = 30*I
+	bottom = sqrt(1 - ((energy/__EMASS__)+1)**(-2))
+
+	V0 = top/bottom
+	if r <= re:
+		return V0*(r/re)**2
+	elif r > re:
+		return V0*(2*log(r/re)+1)
+
+def trapDepth(Vset, re, Ee, I):
+	""" Returns the approximate trap depth by accounting for the space charge of the
+	electron beam.
+	"""
+	rTrap = 0.7  # 7mm inner radius of TRAP DT
+	rSide = 0.25 # 2.5mm inner radius of side DT's
+
+	return Vset + (ebeamPotential(rSide, re, Ee, I) - ebeamPotential(rTrap, re, Ee, I))
+
+def electronIonOverlapFunction(q, ):
+	""" The distribution of each charge state of the ions takes on a Boltzmann distribution.
+
+	We need to get the average energy of an ion, so we divide the total energy by the number of
+	ions in that state... but we are using population fractions... so I divide by what exactly...
+
+	I am thinking that we need to 
+	"""
+	return
+
+
 def coulombLogarithm_ei(Eb, qi):
 	""" The Coulomb logarithm for electron-ion collisions. The natural log of the ratio of the maximum impact
 	parameter to the minimum impact parameter. In a plasma the maximum parameter would usually be the Debye
@@ -72,10 +108,39 @@ def rateSpitzerHeating(mySpecies, myEbitParams):
 	rates = [0]*(mySpecies.Z + 1)
 	for i in range(0, mySpecies.Z+1):
 		# the factor 1e4 ahead is conversion for cm^2 to m^2 to get the correct units.
-		rates[i] = (1e4/__EVCONV__)*(__ECHG__*i*__ECHG__)**2 *numberDensity*coulombLogarithm_ei(myEbitParams.beamEnergy, i)/(6*pi*__EPSILON0__**2 * mi * myEbitParams.electronVelocity)
+		# I see an extra factor of __ECHG__**2, not sure why I added that?
+		rates[i] = (1e4/__EVCONV__)*(__ECHG__*i*__ECHG__)**2 *numberDensity*coulombLogarithm_ei(myEbitParams.beamEnergy, i)/(4*pi*__EPSILON0__**2 * mi * myEbitParams.electronVelocity)
 		# print("Coulomb Log: %s"%str(coulombLogarithm_ei(myEbitParams.beamEnergy, i)))
 	return rates
 
+
+def coulombLogarithm_ii(mySpecies, species):
+	""" The Coulomb logarithm for ion-ion collisions. 
+
+	Semi-empirical formulae obtained from the 2019 Plasma Formulary from the US Naval Research Laboratory:
+
+	https://www.nrl.navy.mil/ppd/content/nrl-plasma-formulary 
+
+	------------
+
+	This is required for the Fokker-Planck equation, which determines if an energetic ion will escape the trap potential.
+
+	"""
+	return
+
+def ionIonInteractionTime(species_i, species_j):
+	""" This is the characteristic relaxation time for two species i and j to interact with each other. This can be
+	different charge states of the same element, or also different elements. The latter part will take time to
+	implement, so I just look at the former for now.
+
+	will use coulombLogarithm_ii(species_i, species_j)
+	
+	
+	"""
+
+
+
+	return
 
 # def calcCoulombLogarithm_ei(mySpecies, myEbitParams):
 # 	""" The Coulomb logarithm for electron-ion collisions. 
@@ -104,19 +169,7 @@ def rateSpitzerHeating(mySpecies, myEbitParams):
 # 		# If we come here there is also a problem
 # 		sys.exit(1)
 
-def coulombLogarithm_ii(mySpecies, species):
-	""" The Coulomb logarithm for ion-ion collisions. 
 
-	Semi-empirical formulae obtained from the 2019 Plasma Formulary from the US Naval Research Laboratory:
-
-	https://www.nrl.navy.mil/ppd/content/nrl-plasma-formulary 
-
-	------------
-
-	This is required for the Fokker-Planck equation, which determines if an energetic ion will escape the trap potential.
-
-	"""
-	return
 
 
 

@@ -9,7 +9,16 @@ def docs_physics():
 
 General
 -------
-The current implementation of CBSim accounts for the following ionization and recombination mechanisms:
+
+Following the 2005 paper by Fred Currell and Gerd Fussmann, we consider the following simplifications:
+ 
+ 1. The electron beam has a radial top hat profile. The radius prescribed in the configuration file is nearly the same as the Herrmann radius. Inside of this radius is an electron beam of uniform density and energy and outside of the radius is zero charge.
+
+ 2. For both the electron beam and the ion cloud, we assume that the axial distributiona are uniform along the length of the trap.
+
+ 3. (currently being implemented) The radial distribution of ions depends on charge state. They follow a Boltzmann distribution.
+
+ The current implementation of CBSim accounts for the following ionization and recombination mechanisms:
 	- electron impact ionization (EI)
 	- radiative recombination (RR)
 	- charge exchange (CX)
@@ -20,6 +29,8 @@ For a species in a specified charge state i, the rate equation is written as
 		 + (RR rate of charge state i+1) - (RR rate of charge state i  )
 		 + (CX rate of charge state i+1) - (CX rate of charge state i  )
 		 - Resc
+
+Where Ni is the total number of ions per length in the trap. It's a good idea to look this up. At TITAN we can inject about 10^6 ions per bunch, but we can load up to a total capacity of about 10^8? I'm not sure, but check the Thesis of Annika Lennarz and the section where she discusses the stacked injection scheme.
 
 The final term in the equation is accounting for the rate at which ions can escape the trap. This escape occurs either radially or axially when the ion obtains enough kinetic energy to overcome the poitentials of the trap.
 
@@ -32,6 +43,8 @@ EI rates are calculated using formulae of the form:
 
 where sigmai is the cross-section and f(e,i) is an electron-ion overlap factor. Je is the current density of electrons.
 
+sigmai is calculated using the Lotz formula.
+
 
 Radiative Recombination
 -----------------------
@@ -39,24 +52,26 @@ Radiative Recombination
 The RR rates can be calculated using a formula mirroring the EI rates:
 	Ri = Je/e * Ni * sigmai * f(e, i)
 
+The cross section is calculated using a time-reversed photonionization cross section.
+
 Charge Exchange
 ---------------
 
-**NOTE: we aren't entirely sure where this semi-empirical formula comes from because it was originally written by Renee K. It's possible we might change this calculation to a formula given in the work of Mueller and Salzborn, 1977.**
-
 The CX rate is calculated as:
-	Ri = q_i * sigma * rho_H2
+    Ri = vi_avg * N0 * Ni * sigmai
 
-where rho_H2 is the density of H2, q_i is the charge state of ion i, and sigma is the CX cross section. The CX cross section is calculated by:
-	sigma = Ccx * log(15/Vbohr) * Vi_avg
+where vi_avg is the average speed of the ion based on a Maxwellian speed distribution, N0 is the number density of the background gas, Ni is the number density of ions, and sigma is the cross section.
 
-where Ccx is a charge exchange constant = 2.25E-16, Vi_avg is the average ion velocity and Vbohr is the average ion velocity relative to the Bohr velocity. Vi_avg can be calculated with:
-	Vi_avg = c * sqrt(8 * Ti / (pi * Mi))
+In this implementation the cross section is calculated by the semi-empirical formula of Mueller and Salzborn, published September 1977.
 
-where Ti is the temperature, and Mi is the mass of the ion in AMU. This is the average velocity of a Maxwellian distribution (holds for low density plasmas).
+sigmai = Ak * Epgas^betak * qi^alphak   for k ranging from i=1 to 4.
+
+This is the cross section for charge exchange from charge state i to charge state i-k. Epgas is the ionization potential for the background gas, and qi is the charge state of the ion. The constants Ak, betak, and alphak are given for each integer k. Sor far this has only been implemented for k=1.
 
 Ion Escape
 ----------
+
+NOT YET IMPLEMENTED
 
 The ion escape rate is written as:
 	Ri = -Ni * Vi * ( exp(-omegai)/omegai - sqrt(omegai)[erf(omegai) - 1] )
@@ -64,10 +79,10 @@ The ion escape rate is written as:
 where omegai = qi * e * V / kb / Ti. V is the potential trap depth (axially or radially), and Ti is the temperature of the ions.
 
 
-Beam Dynamics
--------------
+Geometry
+--------
 
-As inputs, CBSim takes the radius of the electron beam and the amount of spatial overlap between the electron and ion clouds. This calculation is performed in a 2D manner.
+We only consider the trapping region in the EBIT
 
 
 
@@ -138,11 +153,20 @@ The background pressure in the EBIT trap. This is used to determine the charge e
 ionTemperature
 --------------
 
-UNiTS = Kelvin
+UNITS = Kelvin
 
 The __initial__ temperature of the ion cloud. It is used to determine the charge exchange rates by estimating the average ion velocity of a Maxwellian distribution at this temperature.
 
 A general rule of thumb for setting this value is...
+
+populationPercent
+-----------------
+
+UNITS = fraction
+
+A fraction of the total population given for the species. If we start with a single species and populationPercent=1.0, then 100% of the population is this species. The program will renormalize the inputs, therefore if we have two species, each with populationPercent=1.0, then they each garner 50% of the total population.
+
+Please note that the current configutation is that the initial population is ALL singly charged ions (SCI). We might make this customizable in the future.
 
 	"""
 
