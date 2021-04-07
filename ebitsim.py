@@ -210,9 +210,9 @@ def runSimulation(species, ebitParams, probeFnAddPop, outputConfig):
         plotSpeciesResults(species, ebitParams, outputConfig)  # Think about fixing ebitParams later to deal with multiple beam energies..
         print("Writing step size graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_stepSize.png"))
         plotStepsVsIteration(species, outputConfig)
-        if species[0].initSCITemp != None: # if including energy dynamics, plot that too
-            print("Writing energy graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_energy.png"))
-            plotSpeciesEnergies(species, ebitParams, outputConfig)
+        # if species[0].initSCITemp != None: # if including energy dynamics, plot that too
+        #     print("Writing energy graph to : %s" % (outputConfig.outputFileName.split(".")[0]+"_energy.png"))
+        #     plotSpeciesEnergies(species, ebitParams, outputConfig)
     if outputConfig.outputType == 'csv':
         print("Writing csv to : %s \n" % outputConfig.outputFileName)
         writeCSVFile(species, ebitParams[0], outputConfig)

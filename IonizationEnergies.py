@@ -34,7 +34,8 @@ def createIonizationEnergies(ionBindingEnergiesFromCSV):
     for z in range(__MINZ__, __MAXZ__ + 1):
         for q in range(2, z + 1):
 
-            ionizationEnergies[z - 1][q - 1] = round((ionBindingEnergiesFromCSV[z - 1][z - q + 1] - ionBindingEnergiesFromCSV[z - 1][(z - q) + 2]), 2)
+            # This round() was truncated to 2 decimal places. Not sure why, but I increased it and it didn't hurt anything.
+            ionizationEnergies[z - 1][q - 1] = round((ionBindingEnergiesFromCSV[z - 1][z - q + 1] - ionBindingEnergiesFromCSV[z - 1][(z - q) + 2]), 4)
 
     return ionizationEnergies
 

@@ -9,16 +9,17 @@ import time
 
 __EMASS__ = 5.11e5  # "Electron mass in eV"
 __C__ = 3.0e10  # "Speed of light in cm/s"
-__ECHG__ = 1.6e-19  # "Electron charge"
+__ECHG__ = 1.602176e-19  # "Electron charge in Coulombs"
 __VBOHR__ = 2.2e8  # "Bohr velocity in cm/s"
 __AMU__ = 9.311e8  # "1 AMU in eV"
-__TORR__ = 3.537e16  # "1 torr in cm-3"
+#__TORR__ = 3.537e16  # "1 torr in cm-3"
+__TORR__ = 2.414160e18 # new value for __TORR__
 __blah__ = 24.1521e23
 __ALPHA__ = 7.2974e-3  # "fine-structure constant"
 __CHEXCONST__ = 2.25e-16  # "Constant for use in charge-exchange "
 __LCONV__ = 3.861e-11  # "length conversion factor to CGS"
-__kB__ = 1.381e-23  # "Boltzmann constant"
-__Epgas__ = 7.0 # first ionization potential of H2 gas in eV (was 15.42593 eV, Oliver says 7 is correct)
+__kB__ = 1.381e-23  # "Boltzmann constant in J/K"
+__Epgas__ = 7.0 # first ionization potential of H2 gas in eV (was 15.42593 eV, Oliver says about 7 is correct)
 
 
 #Random comment
@@ -352,7 +353,8 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
     A new function from calculateK() so that we can allow heat transfer which occurs which changing charge state populations.
     """
 
-    ionMassIneV = mySpecies.A*__AMU__
+    ionMassIneV = mySpecies.A*__AMU__ # this should be eV
+
     # Lengths here are Z+1 because we have a neutral charge state to account for.
     mySpecies.betaDecayDelta = [0.0]*(Z+1)
     nonDecayLastDelta = 0.0
@@ -372,7 +374,8 @@ def calculateKR(ebitParams, mySpecies, species, tmpPop, Z, ionizationRates, char
         #     where Ni is population of charge state i
         #     = ionization rate of i-1 minus ionization rate of i and recombination rate of i+1 minus recombination rate of i
 
-        avgIonV = __C__*sqrt(8.0*mySpecies.NkT[zindex]/(pi*ionMassIneV))
+        avgIonV = __C__*sqrt(8.0*mySpecies.NkT[zindex]/(pi*ionMassIneV)) # in cm/s
+        # print(avgIonV)
 
         # For each value of charge state q, only the rates between q and q+1 are calculated (not between q-1 and q). This
         # value is retained and used for the next step to account for rates between q-1 and q.
@@ -691,7 +694,11 @@ def calcRateMatrices(mySpecies, myEbitParams, ebitParams):
     # myEbitParams.currentDensity   = (ebitParams[0].ionEbeamOverlap * ebitParams[0].beamCurrent) / (pi * (ebitParams[0].beamRadius ** 2))
     # removed above to calculate it during the class instantiation
     mySpecies.ionizationRates     = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams, createIonizationCrossSections   )
+    print("ionization rates...")
+    print(mySpecies.ionizationRates)
     mySpecies.rrRates             = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,         createRRCrossSections   )
+    print("radiative recombination rates...")
+    print(mySpecies.rrRates)
     if myEbitParams.toggleChargeExchange == 1.0:
         print("CX toggling = %s..."%myEbitParams.toggleChargeExchange+" charge exchange included")
         mySpecies.chargeExchangeRates = createDefaultInteractionRates(mySpecies, myEbitParams, ebitParams,     createChargeExchangeRates_MS, 1)
